@@ -1,4 +1,6 @@
 {
   "facts": [],
-  "conversation_count": 10
+  "conversation_count": 25,
+  "safety_mode": false,
+  "file_protection": false
 }
