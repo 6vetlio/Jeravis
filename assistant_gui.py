@@ -16,6 +16,11 @@ try:
     HAS_PYPERCLIP = True
 except ImportError:
     HAS_PYPERCLIP = False
+try:
+    from PIL import ImageGrab
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 import numpy as np
 import sounddevice as sd
 import speech_recognition as sr
@@ -632,6 +637,17 @@ class JarvisGUI:
         )
         copy_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
+        screenshot_button = tk.Button(
+            input_frame,
+            text="📷 Screenshot",
+            command=self.take_screenshot,
+            bg="#3c3c3c",
+            fg="white",
+            font=("Arial", 10),
+            relief=tk.FLAT
+        )
+        screenshot_button.pack(side=tk.RIGHT, padx=5, pady=10)
+
         # Voice control button
         self.voice_button = tk.Button(
             input_frame,
@@ -745,6 +761,21 @@ class JarvisGUI:
         debug_file = os.path.join(os.path.dirname(__file__), "debug_log.txt")
         with open(debug_file, "w", encoding="utf-8") as f:
             f.write("\n".join(self.debug_log))
+
+    def take_screenshot(self):
+        if not HAS_PIL:
+            self.log("[Screenshot] PIL not installed. Install with: pip install pillow")
+            return
+
+        try:
+            screenshot = ImageGrab.grab()
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            screenshot_path = os.path.join(os.path.dirname(__file__), f"screenshot_{timestamp}.png")
+            screenshot.save(screenshot_path)
+            self.log(f"[Screenshot] Saved to {screenshot_path}")
+            self.log("[Tip] To analyze screenshots, you'll need a vision-capable model like llava")
+        except Exception as e:
+            self.log(f"[Screenshot error: {e}")
 
     def update_status(self, status):
         self.status_label.config(text=status)
