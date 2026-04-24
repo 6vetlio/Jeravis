@@ -675,32 +675,37 @@ class JarvisGUI:
                 continue
 
             self.update_status("Listening...")
-            with self.microphone as source:
-                try:
-                    audio = self.recognizer.listen(
-                        source,
-                        timeout=LISTEN_TIMEOUT_SECONDS,
-                        phrase_time_limit=LISTEN_PHRASE_LIMIT_SECONDS
-                    )
-                except sr.WaitTimeoutError:
-                    continue
-
             try:
-                text = self.recognizer.recognize_whisper(audio, model="base", language="english")
-                text = text.strip()
-                if text:
-                    self.log(f"[Voice] You said: {text}")
-                    if self.speaking_event.is_set() and should_interrupt(text):
-                        self.input_queue.put(("interrupt", text))
+                mic = sr.Microphone(device_index=1)
+                with mic as source:
+                    try:
+                        audio = self.recognizer.listen(
+                            source,
+                            timeout=LISTEN_TIMEOUT_SECONDS,
+                            phrase_time_limit=LISTEN_PHRASE_LIMIT_SECONDS
+                        )
+                    except sr.WaitTimeoutError:
                         continue
-                    if not is_meaningful_voice_text(text):
-                        continue
-                    self.input_queue.put(("voice", text))
-            except sr.UnknownValueError:
-                continue
+
+                try:
+                    text = self.recognizer.recognize_whisper(audio, model="base", language="english")
+                    text = text.strip()
+                    if text:
+                        self.log(f"[Voice] You said: {text}")
+                        if self.speaking_event.is_set() and should_interrupt(text):
+                            self.input_queue.put(("interrupt", text))
+                            continue
+                        if not is_meaningful_voice_text(text):
+                            continue
+                        self.input_queue.put(("voice", text))
+                except sr.UnknownValueError:
+                    continue
+                except Exception as e:
+                    self.log(f"[Whisper error: {e}]")
+                    continue
             except Exception as e:
-                self.log(f"[Whisper error: {e}]")
-                continue
+                self.log(f"[Mic error: {e}]")
+                time.sleep(1)
 
             self.update_status("Ready")
 
