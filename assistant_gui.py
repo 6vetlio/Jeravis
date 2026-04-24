@@ -667,28 +667,28 @@ class JarvisGUI:
                 try:
                     self.microphone = sr.Microphone(device_index=self.mic_device_index)
                     self.log(f"[Mic] Using device index {self.mic_device_index}")
+                    self.recognizer.dynamic_energy_threshold = True
+                    self.recognizer.pause_threshold = 0.6
+                    self.recognizer.non_speaking_duration = 0.35
+                    self.recognizer.phrase_threshold = 0.25
+
+                    self.log("[Mic] Calibrating...")
+                    try:
+                        with self.microphone as source:
+                            self.recognizer.adjust_for_ambient_noise(source, duration=MIC_CALIBRATION_SECONDS)
+                        self.log("[Mic] Calibration complete")
+                    except Exception as e:
+                        self.log(f"[Mic warning] Calibration failed: {e}")
+                        self.log("[Mic] Using default settings")
                 except Exception as e:
                     self.log(f"[Mic error] Failed to initialize microphone device index {self.mic_device_index}: {e}")
                     self.log("[Mic] Voice input will be disabled")
                     self.microphone = None
+                    self.voice_enabled = False
+                    self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
             else:
                 self.log("[Mic] Voice input disabled (no microphone selected)")
                 self.microphone = None
-
-            if self.microphone:
-                self.recognizer.dynamic_energy_threshold = True
-                self.recognizer.pause_threshold = 0.6
-                self.recognizer.non_speaking_duration = 0.35
-                self.recognizer.phrase_threshold = 0.25
-
-                self.log("[Mic] Calibrating...")
-                try:
-                    with self.microphone as source:
-                        self.recognizer.adjust_for_ambient_noise(source, duration=MIC_CALIBRATION_SECONDS)
-                except Exception as e:
-                    self.log(f"[Mic warning] Calibration failed: {e}")
-                    self.log("[Mic] Using default settings")
-            else:
                 self.voice_enabled = False
                 self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
 
@@ -755,6 +755,8 @@ class JarvisGUI:
             self.input_entry.delete(0, tk.END)
             self.log(f"You (typed): {text}")
             self.input_queue.put(("text", text))
+        if event:
+            return "break"
 
     def toggle_voice(self):
         self.voice_enabled = not self.voice_enabled
@@ -769,6 +771,7 @@ class JarvisGUI:
         if self.mic_device_index is None:
             return
 
+        mic_error_count = 0
         while True:
             if not self.voice_enabled or self.speaking_event.is_set():
                 time.sleep(0.02)
@@ -798,13 +801,26 @@ class JarvisGUI:
                         if not is_meaningful_voice_text(text):
                             continue
                         self.input_queue.put(("voice", text))
+                        mic_error_count = 0
                 except sr.UnknownValueError:
                     continue
                 except Exception as e:
-                    self.log(f"[Whisper error: {e}]")
+                    mic_error_count += 1
+                    if mic_error_count < 3:
+                        self.log(f"[Whisper error: {e}")
+                    else:
+                        self.log("[Whisper] Too many errors, pausing voice input for 10 seconds")
+                        time.sleep(10)
+                        mic_error_count = 0
                     continue
             except Exception as e:
-                self.log(f"[Mic error: {e}")
+                mic_error_count += 1
+                if mic_error_count < 3:
+                    self.log(f"[Mic error: {e}")
+                else:
+                    self.log("[Mic] Too many errors, pausing voice input for 10 seconds")
+                    time.sleep(10)
+                    mic_error_count = 0
                 time.sleep(1)
 
             self.update_status("Ready")
