@@ -30,7 +30,7 @@ A local AI voice assistant powered by Ollama, Kokoro TTS, and Whisper voice inpu
    ```
 3. Install Python dependencies:
    ```powershell
-   pip install ollama kokoro-onnx sounddevice SpeechRecognition requests pyperclip
+   pip install ollama kokoro-onnx sounddevice SpeechRecognition requests pyperclip pillow
    ```
 4. Download Kokoro TTS models (not included in repository due to size):
    - Download `kokoro-v1.0.onnx` (~325MB) and `voices-v1.0.bin` (~28MB)
@@ -57,6 +57,10 @@ The GUI includes:
 - Voice enable/disable toggle button
 - Status indicator (Ready, Listening, Processing)
 - Dark theme interface
+- Copy log button (copies conversation to clipboard)
+- Screenshot button (captures screen to file)
+
+**Note:** The current model (qwen2.5:7b) does not support vision. Screenshots are saved to files but not analyzed. For full vision capabilities like Gemini, you would need a vision-capable model like llava from Ollama.
 
 Activate Jarvis by saying **"Jarvis"** or using the fuzzy aliases:
 - "Jervis"
