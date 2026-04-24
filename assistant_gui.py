@@ -595,15 +595,34 @@ class JarvisGUI:
         self.engine = Kokoro(os.path.join(_dir, "kokoro-v1.0.onnx"), os.path.join(_dir, "voices-v1.0.bin"))
 
         self.recognizer = sr.Recognizer()
-        self.microphone = sr.Microphone(device_index=1)
-        self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 0.6
-        self.recognizer.non_speaking_duration = 0.35
-        self.recognizer.phrase_threshold = 0.25
+        try:
+            self.microphone = sr.Microphone(device_index=1)
+        except Exception as e:
+            self.log(f"[Mic error] Failed to initialize microphone device index 1: {e}")
+            self.log("[Mic] Trying default microphone...")
+            try:
+                self.microphone = sr.Microphone()
+            except Exception as e2:
+                self.log(f"[Mic error] Failed to initialize default microphone: {e2}")
+                self.log("[Mic] Voice input will be disabled")
+                self.microphone = None
 
-        self.log("[Mic] Calibrating...")
-        with self.microphone as source:
-            self.recognizer.adjust_for_ambient_noise(source, duration=MIC_CALIBRATION_SECONDS)
+        if self.microphone:
+            self.recognizer.dynamic_energy_threshold = True
+            self.recognizer.pause_threshold = 0.6
+            self.recognizer.non_speaking_duration = 0.35
+            self.recognizer.phrase_threshold = 0.25
+
+            self.log("[Mic] Calibrating...")
+            try:
+                with self.microphone as source:
+                    self.recognizer.adjust_for_ambient_noise(source, duration=MIC_CALIBRATION_SECONDS)
+            except Exception as e:
+                self.log(f"[Mic warning] Calibration failed: {e}")
+                self.log("[Mic] Using default settings")
+        else:
+            self.voice_enabled = False
+            self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
 
         self.memory["conversation_count"] = self.memory.get("conversation_count", 0) + 1
         save_memory(self.memory)
@@ -615,8 +634,9 @@ class JarvisGUI:
 
         speak(self.engine, "Jarvis online. Ready when you are.", self.speaking_event, self.interrupt_event, self.log)
 
-        voice_thread = threading.Thread(target=self.listen_voice, daemon=True)
-        voice_thread.start()
+        if self.microphone:
+            voice_thread = threading.Thread(target=self.listen_voice, daemon=True)
+            voice_thread.start()
 
         worker_thread = threading.Thread(target=self.response_worker, daemon=True)
         worker_thread.start()
