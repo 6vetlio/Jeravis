@@ -494,27 +494,34 @@ def process_response(response: str, memory: dict, speak_fn, interrupt_event=None
 
 class JarvisGUI:
     def __init__(self, root):
-        self.root = root
-        self.root.title("Jarvis - AI Assistant")
-        self.root.geometry("800x600")
-        self.root.configure(bg="#1e1e1e")
+        try:
+            self.root = root
+            self.root.title("Jarvis - AI Assistant")
+            self.root.geometry("800x600")
+            self.root.configure(bg="#1e1e1e")
 
-        self.memory = load_memory()
-        self.history = []
-        self.input_queue = queue.Queue()
-        self.pending_queue = queue.Queue()
-        self.speaking_event = threading.Event()
-        self.interrupt_event = threading.Event()
-        self.state = {"active": False, "processing": False}
-        self.engine = None
-        self.recognizer = None
-        self.microphone = None
-        self.mic_device_index = None
-        self.debug_log = []
+            self.memory = load_memory()
+            self.history = []
+            self.input_queue = queue.Queue()
+            self.pending_queue = queue.Queue()
+            self.speaking_event = threading.Event()
+            self.interrupt_event = threading.Event()
+            self.state = {"active": False, "processing": False}
+            self.engine = None
+            self.recognizer = None
+            self.microphone = None
+            self.mic_device_index = None
+            self.debug_log = []
 
-        self.select_microphone()
-        self.setup_ui()
-        self.initialize_jarvis()
+            self.select_microphone()
+            self.setup_ui()
+            self.initialize_jarvis()
+        except Exception as e:
+            print(f"[!] GUI initialization error: {e}")
+            import traceback
+            traceback.print_exc()
+            input("\nPress Enter to exit...")
+            sys.exit(1)
 
     def select_microphone(self):
         print("=" * 50)
@@ -636,71 +643,79 @@ class JarvisGUI:
         self.voice_enabled = True
 
     def initialize_jarvis(self):
-        self.log("=" * 50)
-        self.log("  JARVIS - Initialising...")
-        self.log("=" * 50)
+        try:
+            self.log("=" * 50)
+            self.log("  JARVIS - Initialising...")
+            self.log("=" * 50)
 
-        ollama_ready = start_ollama_if_needed()
-        if not ollama_ready:
-            self.log("[!] Continuing without a live Ollama connection. The first request will retry automatically.")
-        else:
-            threading.Thread(target=warm_ollama_model, daemon=True).start()
+            ollama_ready = start_ollama_if_needed()
+            if not ollama_ready:
+                self.log("[!] Continuing without a live Ollama connection. The first request will retry automatically.")
+            else:
+                threading.Thread(target=warm_ollama_model, daemon=True).start()
 
-        self.log("[TTS] Loading Kokoro voice engine...")
-        _dir = os.path.dirname(os.path.abspath(__file__))
-        self.engine = Kokoro(os.path.join(_dir, "kokoro-v1.0.onnx"), os.path.join(_dir, "voices-v1.0.bin"))
+            self.log("[TTS] Loading Kokoro voice engine...")
+            _dir = os.path.dirname(os.path.abspath(__file__))
+            self.engine = Kokoro(os.path.join(_dir, "kokoro-v1.0.onnx"), os.path.join(_dir, "voices-v1.0.bin"))
 
-        self.recognizer = sr.Recognizer()
-        if self.mic_device_index is not None:
-            try:
-                self.microphone = sr.Microphone(device_index=self.mic_device_index)
-                self.log(f"[Mic] Using device index {self.mic_device_index}")
-            except Exception as e:
-                self.log(f"[Mic error] Failed to initialize microphone device index {self.mic_device_index}: {e}")
-                self.log("[Mic] Voice input will be disabled")
+            self.recognizer = sr.Recognizer()
+            if self.mic_device_index is not None:
+                try:
+                    self.microphone = sr.Microphone(device_index=self.mic_device_index)
+                    self.log(f"[Mic] Using device index {self.mic_device_index}")
+                except Exception as e:
+                    self.log(f"[Mic error] Failed to initialize microphone device index {self.mic_device_index}: {e}")
+                    self.log("[Mic] Voice input will be disabled")
+                    self.microphone = None
+            else:
+                self.log("[Mic] Voice input disabled (no microphone selected)")
                 self.microphone = None
-        else:
-            self.log("[Mic] Voice input disabled (no microphone selected)")
-            self.microphone = None
 
-        if self.microphone:
-            self.recognizer.dynamic_energy_threshold = True
-            self.recognizer.pause_threshold = 0.6
-            self.recognizer.non_speaking_duration = 0.35
-            self.recognizer.phrase_threshold = 0.25
+            if self.microphone:
+                self.recognizer.dynamic_energy_threshold = True
+                self.recognizer.pause_threshold = 0.6
+                self.recognizer.non_speaking_duration = 0.35
+                self.recognizer.phrase_threshold = 0.25
 
-            self.log("[Mic] Calibrating...")
-            try:
-                with self.microphone as source:
-                    self.recognizer.adjust_for_ambient_noise(source, duration=MIC_CALIBRATION_SECONDS)
-            except Exception as e:
-                self.log(f"[Mic warning] Calibration failed: {e}")
-                self.log("[Mic] Using default settings")
-        else:
-            self.voice_enabled = False
-            self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
+                self.log("[Mic] Calibrating...")
+                try:
+                    with self.microphone as source:
+                        self.recognizer.adjust_for_ambient_noise(source, duration=MIC_CALIBRATION_SECONDS)
+                except Exception as e:
+                    self.log(f"[Mic warning] Calibration failed: {e}")
+                    self.log("[Mic] Using default settings")
+            else:
+                self.voice_enabled = False
+                self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
 
-        self.memory["conversation_count"] = self.memory.get("conversation_count", 0) + 1
-        save_memory(self.memory)
+            self.memory["conversation_count"] = self.memory.get("conversation_count", 0) + 1
+            save_memory(self.memory)
 
-        self.log(f"\n[Ready] Say or type '{WAKE_WORD.upper()}' to activate.")
-        self.log("[Tip]   You can also just type your message directly and press Enter.")
-        
-        self.update_status("Ready")
+            self.log(f"\n[Ready] Say or type '{WAKE_WORD.upper()}' to activate.")
+            self.log("[Tip]   You can also just type your message directly and press Enter.")
 
-        speak(self.engine, "Jarvis online. Ready when you are.", self.speaking_event, self.interrupt_event, self.log)
+            self.update_status("Ready")
 
-        if self.mic_device_index is not None:
-            voice_thread = threading.Thread(target=self.listen_voice, daemon=True)
-            voice_thread.start()
-        else:
-            self.voice_enabled = False
-            self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
+            speak(self.engine, "Jarvis online. Ready when you are.", self.speaking_event, self.interrupt_event, self.log)
 
-        worker_thread = threading.Thread(target=self.response_worker, daemon=True)
-        worker_thread.start()
+            if self.mic_device_index is not None:
+                voice_thread = threading.Thread(target=self.listen_voice, daemon=True)
+                voice_thread.start()
+            else:
+                self.voice_enabled = False
+                self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
 
-        self.root.after(100, self.process_queue)
+            worker_thread = threading.Thread(target=self.response_worker, daemon=True)
+            worker_thread.start()
+
+            self.root.after(100, self.process_queue)
+
+        except Exception as e:
+            self.log(f"[!] Initialization error: {e}")
+            import traceback
+            self.log(traceback.format_exc())
+            self.log("[!] Jarvis failed to start. Check the error above.")
+            input("\nPress Enter to exit...")
 
     def log(self, message):
         self.chat_display.config(state=tk.NORMAL)
