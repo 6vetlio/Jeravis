@@ -30,7 +30,7 @@ A local AI voice assistant powered by Ollama, Kokoro TTS, and Whisper voice inpu
    ```
 3. Install Python dependencies:
    ```powershell
-   pip install ollama kokoro-onnx sounddevice SpeechRecognition requests
+   pip install ollama kokoro-onnx sounddevice SpeechRecognition requests pyperclip
    ```
 4. Download Kokoro TTS models (not included in repository due to size):
    - Download `kokoro-v1.0.onnx` (~325MB) and `voices-v1.0.bin` (~28MB)

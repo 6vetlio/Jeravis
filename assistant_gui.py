@@ -11,6 +11,7 @@ import sys
 
 import tkinter as tk
 from tkinter import scrolledtext, ttk
+import pyperclip
 import numpy as np
 import sounddevice as sd
 import speech_recognition as sr
@@ -509,6 +510,7 @@ class JarvisGUI:
         self.recognizer = None
         self.microphone = None
         self.mic_device_index = None
+        self.debug_log = []
 
         self.select_microphone()
         self.setup_ui()
@@ -598,15 +600,26 @@ class JarvisGUI:
         self.input_entry.bind("<Return>", self.on_send)
 
         send_button = tk.Button(
-            input_frame, 
-            text="Send", 
+            input_frame,
+            text="Send",
             command=self.on_send,
-            bg="#0e639c", 
+            bg="#0e639c",
             fg="white",
             font=("Arial", 10, "bold"),
             relief=tk.FLAT
         )
         send_button.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        copy_button = tk.Button(
+            input_frame,
+            text="📋 Copy Log",
+            command=self.copy_log,
+            bg="#3c3c3c",
+            fg="white",
+            font=("Arial", 10),
+            relief=tk.FLAT
+        )
+        copy_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
         # Voice control button
         self.voice_button = tk.Button(
@@ -677,9 +690,12 @@ class JarvisGUI:
 
         speak(self.engine, "Jarvis online. Ready when you are.", self.speaking_event, self.interrupt_event, self.log)
 
-        if self.microphone:
+        if self.mic_device_index is not None:
             voice_thread = threading.Thread(target=self.listen_voice, daemon=True)
             voice_thread.start()
+        else:
+            self.voice_enabled = False
+            self.voice_button.config(bg="#8b0000", text="🔇 No Mic")
 
         worker_thread = threading.Thread(target=self.response_worker, daemon=True)
         worker_thread.start()
@@ -691,6 +707,20 @@ class JarvisGUI:
         self.chat_display.insert(tk.END, message + "\n")
         self.chat_display.see(tk.END)
         self.chat_display.config(state=tk.DISABLED)
+        self.debug_log.append(message)
+        if len(self.debug_log) > 1000:
+            self.debug_log = self.debug_log[-1000:]
+
+    def copy_log(self):
+        log_text = "\n".join(self.debug_log)
+        pyperclip.copy(log_text)
+        self.log("[Clipboard] Conversation log copied to clipboard")
+        self.auto_copy_debug_to_file()
+
+    def auto_copy_debug_to_file(self):
+        debug_file = os.path.join(os.path.dirname(__file__), "debug_log.txt")
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(self.debug_log))
 
     def update_status(self, status):
         self.status_label.config(text=status)
@@ -712,6 +742,9 @@ class JarvisGUI:
             self.log("[Voice] Disabled")
 
     def listen_voice(self):
+        if self.mic_device_index is None:
+            return
+
         while True:
             if not self.voice_enabled or self.speaking_event.is_set():
                 time.sleep(0.02)
@@ -719,7 +752,7 @@ class JarvisGUI:
 
             self.update_status("Listening...")
             try:
-                mic = sr.Microphone(device_index=self.mic_device_index) if self.mic_device_index is not None else sr.Microphone()
+                mic = sr.Microphone(device_index=self.mic_device_index)
                 with mic as source:
                     try:
                         audio = self.recognizer.listen(
@@ -747,7 +780,7 @@ class JarvisGUI:
                     self.log(f"[Whisper error: {e}]")
                     continue
             except Exception as e:
-                self.log(f"[Mic error: {e}]")
+                self.log(f"[Mic error: {e}")
                 time.sleep(1)
 
             self.update_status("Ready")
