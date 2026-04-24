@@ -11,7 +11,11 @@ import sys
 
 import tkinter as tk
 from tkinter import scrolledtext, ttk
-import pyperclip
+try:
+    import pyperclip
+    HAS_PYPERCLIP = True
+except ImportError:
+    HAS_PYPERCLIP = False
 import numpy as np
 import sounddevice as sd
 import speech_recognition as sr
@@ -727,6 +731,11 @@ class JarvisGUI:
             self.debug_log = self.debug_log[-1000:]
 
     def copy_log(self):
+        if not HAS_PYPERCLIP:
+            self.log("[Clipboard] pyperclip not installed. Install with: pip install pyperclip")
+            self.auto_copy_debug_to_file()
+            return
+
         log_text = "\n".join(self.debug_log)
         pyperclip.copy(log_text)
         self.log("[Clipboard] Conversation log copied to clipboard")
