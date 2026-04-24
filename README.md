@@ -39,10 +39,24 @@ A local AI voice assistant powered by Ollama, Kokoro TTS, and Whisper voice inpu
 
 ## Usage
 
-Run Jarvis:
+### CLI Version (No GUI)
+Run Jarvis in the terminal:
 ```powershell
 py -3.11 C:\Users\svet\Documents\GitHub\Жаравиз\assistant.py
 ```
+
+### GUI Version
+Run Jarvis with a graphical interface:
+```powershell
+py -3.11 C:\Users\svet\Documents\GitHub\Жаравиз\assistant_gui.py
+```
+
+The GUI includes:
+- Conversation history display
+- Text input field with Enter to send
+- Voice enable/disable toggle button
+- Status indicator (Ready, Listening, Processing)
+- Dark theme interface
 
 Activate Jarvis by saying **"Jarvis"** or using the fuzzy aliases:
 - "Jervis"
