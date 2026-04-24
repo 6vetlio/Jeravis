@@ -508,9 +508,52 @@ class JarvisGUI:
         self.engine = None
         self.recognizer = None
         self.microphone = None
+        self.mic_device_index = None
 
+        self.select_microphone()
         self.setup_ui()
         self.initialize_jarvis()
+
+    def select_microphone(self):
+        print("=" * 50)
+        print("  JARVIS - Microphone Selection")
+        print("=" * 50)
+        print("\nAvailable microphones:")
+        
+        mics = sr.Microphone.list_microphone_names()
+        if not mics:
+            print("[!] No microphones found. Voice input will be disabled.")
+            self.mic_device_index = None
+            input("\nPress Enter to continue...")
+            return
+
+        for i, mic_name in enumerate(mics):
+            print(f"  [{i}] {mic_name}")
+
+        print("\n" + "=" * 50)
+        while True:
+            try:
+                selection = input(f"Select microphone (0-{len(mics)-1}): ").strip()
+                if not selection:
+                    print("[!] No selection. Voice input will be disabled.")
+                    self.mic_device_index = None
+                    break
+                index = int(selection)
+                if 0 <= index < len(mics):
+                    self.mic_device_index = index
+                    print(f"[Selected] {mics[index]}")
+                    break
+                else:
+                    print(f"[!] Invalid selection. Please enter a number between 0 and {len(mics)-1}.")
+            except ValueError:
+                print("[!] Invalid input. Please enter a number.")
+            except KeyboardInterrupt:
+                print("\n[!] Cancelled. Voice input will be disabled.")
+                self.mic_device_index = None
+                break
+
+        print("=" * 50)
+        print()
 
     def setup_ui(self):
         # Header
@@ -595,17 +638,17 @@ class JarvisGUI:
         self.engine = Kokoro(os.path.join(_dir, "kokoro-v1.0.onnx"), os.path.join(_dir, "voices-v1.0.bin"))
 
         self.recognizer = sr.Recognizer()
-        try:
-            self.microphone = sr.Microphone(device_index=1)
-        except Exception as e:
-            self.log(f"[Mic error] Failed to initialize microphone device index 1: {e}")
-            self.log("[Mic] Trying default microphone...")
+        if self.mic_device_index is not None:
             try:
-                self.microphone = sr.Microphone()
-            except Exception as e2:
-                self.log(f"[Mic error] Failed to initialize default microphone: {e2}")
+                self.microphone = sr.Microphone(device_index=self.mic_device_index)
+                self.log(f"[Mic] Using device index {self.mic_device_index}")
+            except Exception as e:
+                self.log(f"[Mic error] Failed to initialize microphone device index {self.mic_device_index}: {e}")
                 self.log("[Mic] Voice input will be disabled")
                 self.microphone = None
+        else:
+            self.log("[Mic] Voice input disabled (no microphone selected)")
+            self.microphone = None
 
         if self.microphone:
             self.recognizer.dynamic_energy_threshold = True
@@ -676,7 +719,7 @@ class JarvisGUI:
 
             self.update_status("Listening...")
             try:
-                mic = sr.Microphone(device_index=1)
+                mic = sr.Microphone(device_index=self.mic_device_index) if self.mic_device_index is not None else sr.Microphone()
                 with mic as source:
                     try:
                         audio = self.recognizer.listen(
