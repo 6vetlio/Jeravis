@@ -91,11 +91,12 @@ OLLAMA_KEEP_ALIVE = "5m"
 
 # GPU layer allocation per model (optimized for RTX 4070 12GB VRAM)
 # Use num_gpu: 99 to let Ollama decide layer split, not hardcoded values
+# Exception: qwen2.5:32b uses num_gpu: 33 and num_ctx: 2048 to prevent OOM on 8GB VRAM
 MODEL_CONFIG = {
     OLLAMA_MODEL: {"num_gpu": 99, "num_thread": 8},
     OLLAMA_SECONDARY_MODEL: {"num_gpu": 99, "num_thread": 8},
-    OLLAMA_LARGE_MODEL: {"num_gpu": 99, "num_thread": 8},
-    OLLAMA_CODING_MODEL: {"num_gpu": 99, "num_thread": 8},
+    OLLAMA_LARGE_MODEL: {"num_gpu": 33, "num_thread": 8, "num_ctx": 2048},  # 32b Q4 is ~20GB, only ~1/3 fits in 8GB VRAM
+    OLLAMA_CODING_MODEL: {"num_gpu": 33, "num_thread": 8, "num_ctx": 2048},  # Same 32b model, same constraints
     VISION_MODEL: {"num_gpu": 99, "num_thread": 8},
 }
 
@@ -885,9 +886,15 @@ def select_model_for_query(query: str) -> str:
     if is_coding_query(query):
         return OLLAMA_CODING_MODEL  # qwen2.5-coder:32b-instruct-q4_K_M
     
-    # Complex/long queries: use large model
-    if len(query) > 100 or any(word in lowered for word in ["explain", "analyze", "complex", "detailed", "comprehensive"]):
-        return OLLAMA_LARGE_MODEL  # qwen2.5:32b
+    # Complex/long queries: use large model only for explicitly complex requests
+    # Demoted from len(query) > 100 to len(query) > 200 to reduce 32b usage
+    # Only use 32b for explicitly detailed analysis, comprehensive explanations
+    if len(query) > 200 or any(word in lowered for word in ["comprehensive", "in-depth", "thorough analysis", "detailed breakdown"]):
+        return OLLAMA_LARGE_MODEL  # qwen2.5:32b - last resort due to VRAM constraints
+    
+    # Medium complexity: use secondary model (14b) instead of 32b to prevent OOM
+    if len(query) > 100 or any(word in lowered for word in ["explain", "analyze", "complex", "detailed"]):
+        return OLLAMA_SECONDARY_MODEL  # qwen2.5:14b - fits comfortably in VRAM
     
     # Default: secondary model for general purpose
     return OLLAMA_SECONDARY_MODEL  # qwen2.5:14b
@@ -1573,7 +1580,7 @@ def save_personality_trait(trait: str):
         print(f"[Personality] Added: {trait}")
 
 
-def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, safety_mode=True, personality="", thinking_callback=None, use_secondary=False, custom_model=None) -> str:
+def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, safety_mode=True, personality="", thinking_callback=None, use_secondary=False, custom_model=None, chunk_callback=None) -> str:
     # Select model based on query complexity if no custom model specified
     model = custom_model or select_model_for_query(prompt)
     
@@ -1626,6 +1633,8 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, s
                     chunks.append(content_part)
                     if thinking_callback:
                         thinking_callback(content_part)
+                    if chunk_callback:
+                        chunk_callback(content_part)
 
             if interrupt_event is not None and interrupt_event.is_set():
                 return INTERRUPTED_RESPONSE
@@ -1661,13 +1670,49 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, s
                             chunks.append(content_part)
                             if thinking_callback:
                                 thinking_callback(content_part)
+                            if chunk_callback:
+                                chunk_callback(content_part)
                     content = "".join(chunks).strip()
                     if content:
                         return content
                 except Exception as fallback_error:
                     last_error = fallback_error
         except Exception as e:
-            last_error = e
+            # Check for llama runner crash (status 500) - OOM error
+            error_text = str(e)
+            if "status code: 500" in error_text or "llama runner process has terminated" in error_text:
+                last_error = e
+                print(f"[!] Model crash detected (status 500), falling back to {OLLAMA_MODEL}")
+                try:
+                    response = ollama.chat(
+                        model=OLLAMA_MODEL,
+                        messages=messages,
+                        stream=True,
+                        keep_alive=OLLAMA_KEEP_ALIVE,
+                        options={
+                            "num_gpu": MODEL_CONFIG[OLLAMA_MODEL]["num_gpu"],
+                            "num_thread": MODEL_CONFIG[OLLAMA_MODEL]["num_thread"],
+                            "num_predict": 1024,
+                        }
+                    )
+                    chunks = []
+                    for chunk in response:
+                        if interrupt_event is not None and interrupt_event.is_set():
+                            return INTERRUPTED_RESPONSE
+                        content_part = extract_ollama_content(chunk)
+                        if content_part:
+                            chunks.append(content_part)
+                            if thinking_callback:
+                                thinking_callback(content_part)
+                            if chunk_callback:
+                                chunk_callback(content_part)
+                    content = "".join(chunks).strip()
+                    if content:
+                        return content
+                except Exception as fallback_error:
+                    last_error = fallback_error
+            else:
+                last_error = e
 
         if attempt < OLLAMA_RETRY_COUNT - 1:
             time.sleep(1 + attempt)
@@ -3897,6 +3942,7 @@ class JarvisGUI:
         if self.autonomous_mode:
             self.log("[Autonomous] Mode enabled - Jarvis will think independently")
             self.pause_button.config(state=tk.NORMAL)
+            self.autonomous_error_count = 0  # Reset error counter
             threading.Thread(target=self.autonomous_thinking_loop, daemon=True).start()
         else:
             self.log("[Autonomous] Mode disabled")
@@ -3911,6 +3957,7 @@ class JarvisGUI:
         else:
             self.pause_button.config(text="⏸️ Pause")
             self.log("[Autonomous] Resumed")
+            self.autonomous_error_count = 0  # Reset error counter on manual resume
         self.update_status_bar()
 
     def autonomous_thinking_loop(self):
@@ -3932,8 +3979,17 @@ class JarvisGUI:
                     if response and response != "I can't reach my brain (Ollama)":
                         self.append_thinking(f"Thought: {response}\n")
                         self.log(f"[Autonomous] {response}")
+                        self.autonomous_error_count = 0  # Reset error counter on success
                 except Exception as e:
                     self.log(f"[Autonomous] Error: {e}")
+                    self.autonomous_error_count += 1
+                    
+                    # Circuit breaker: pause after 3 consecutive errors
+                    if self.autonomous_error_count >= 3:
+                        self.autonomous_paused = True
+                        self.pause_button.config(text="▶️ Resume")
+                        self.log("[Autonomous] Paused due to 3 consecutive errors. Resume manually via Auto button.")
+                        self.update_status_bar()
             time.sleep(30)
 
     def extract_personality_trait(self, user_message: str, jarvis_response: str):
@@ -4044,6 +4100,16 @@ class JarvisGUI:
                 self.message_id = self.increment_message_id()
                 thinking_output = []
                 
+                # Clear thinking box before new query
+                self.thinking_text.delete(1.0, tk.END)
+                
+                # Define chunk callback with tkinter after(0) for thread safety
+                def update_thinking(chunk):
+                    self.thinking_text.after(0, lambda c=chunk: (
+                        self.thinking_text.insert("end", c),
+                        self.thinking_text.see("end")
+                    ))
+                
                 # Check which API provider to use
                 try:
                     api_keys = load_api_keys()
@@ -4059,7 +4125,7 @@ class JarvisGUI:
                     if default_provider == "ollama":
                         # Use Ollama (local models)
                         self.log(f"[Model] Using Ollama with {selected_model}")
-                        response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model)
+                        response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model, chunk_callback=update_thinking)
                     else:
                         # Use external API
                         self.log(f"[Model] Using {default_provider} API")
@@ -4067,7 +4133,7 @@ class JarvisGUI:
                 except Exception as e:
                     self.log(f"[Model] API call failed, falling back to Ollama: {e}")
                     # Fallback to Ollama
-                    response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model)
+                    response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model, chunk_callback=update_thinking)
                 
                 # Extract thinking content from response if present
                 thinking_content, response = extract_thinking_content(response)
