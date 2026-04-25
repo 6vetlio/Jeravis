@@ -2672,8 +2672,8 @@ class JarvisGUI:
                 self.thinking_window.withdraw()
             self.log("[Thinking] Panel hidden")
 
-    def append_thinking(self, text: str):
-        """Append text to the thinking panel with readable pacing"""
+    def append_thinking(self, text: str, pace=False):
+        """Append text to the thinking panel with optional pacing"""
         # Always insert into the main thinking text widget
         self.thinking_text.insert(tk.END, text)
         self.thinking_text.see(tk.END)
@@ -2684,9 +2684,9 @@ class JarvisGUI:
             self.thinking_window_text.see(tk.END)
             self.thinking_window_text.update_idletasks()
         
-        # Pacing: longer text gets more delay for readability
-        text_length = len(text)
-        if text_length > 0:
+        # Pacing: only apply if explicitly requested (for final response, not streaming)
+        if pace and text_length > 0:
+            text_length = len(text)
             # Calculate delay: 0.01s per character, max 0.5s, min 0.05s
             delay = min(0.5, max(0.05, text_length * 0.01))
             time.sleep(delay)
@@ -4059,15 +4059,15 @@ class JarvisGUI:
                     if default_provider == "ollama":
                         # Use Ollama (local models)
                         self.log(f"[Model] Using Ollama with {selected_model}")
-                        response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text))[1], False, selected_model)
+                        response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model)
                     else:
                         # Use external API
                         self.log(f"[Model] Using {default_provider} API")
-                        response = ask_external_api(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text))[1], default_provider)
+                        response = ask_external_api(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], default_provider)
                 except Exception as e:
                     self.log(f"[Model] API call failed, falling back to Ollama: {e}")
                     # Fallback to Ollama
-                    response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text))[1], False, selected_model)
+                    response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model)
                 
                 # Extract thinking content from response if present
                 thinking_content, response = extract_thinking_content(response)
