@@ -1901,6 +1901,7 @@ class JarvisGUI:
             self.autonomous_mode = False
             self.autonomous_paused = False
             self.thinking_power = self.memory.get("thinking_power", THINKING_POWER_DEFAULT)
+            self.current_model = self.memory.get("current_model", OLLAMA_MODEL)  # Persist selected model
             
             # Handle speech_speed conversion from memory (could be None, string, or float)
             speech_speed_from_memory = self.memory.get("speech_speed", SPEECH_SPEED_DEFAULT)
@@ -3404,11 +3405,12 @@ class JarvisGUI:
         dialog.geometry("400x300")
         dialog.configure(bg="#1e1e1e")
         
-        # Model list
-        models = [OLLAMA_MODEL, OLLAMA_SECONDARY_MODEL, OLLAMA_CODING_MODEL, VISION_MODEL]
+        # Model list (all available models including 32b for manual selection)
+        models = [OLLAMA_MODEL, OLLAMA_SECONDARY_MODEL, OLLAMA_LARGE_MODEL, OLLAMA_CODING_MODEL, VISION_MODEL]
         model_labels = {
             OLLAMA_MODEL: f"{OLLAMA_MODEL} (Fast - Small Tasks)",
             OLLAMA_SECONDARY_MODEL: f"{OLLAMA_SECONDARY_MODEL} (General Purpose)",
+            OLLAMA_LARGE_MODEL: f"{OLLAMA_LARGE_MODEL} (Complex Analysis - Last Resort)",
             OLLAMA_CODING_MODEL: f"{OLLAMA_CODING_MODEL} (Coding/Unity)",
             VISION_MODEL: f"{VISION_MODEL} (Vision)"
         }
@@ -3418,7 +3420,8 @@ class JarvisGUI:
         
         tk.Label(model_frame, text="Available Models:", bg="#1e1e1e", fg="#d4d4d4", font=("Arial", 10)).pack(anchor="w")
         
-        model_var = tk.StringVar(value=OLLAMA_MODEL)
+        # Use current_model from memory as initial value
+        model_var = tk.StringVar(value=self.current_model)
         
         for model in models:
             label = model_labels.get(model, model)
@@ -3437,6 +3440,9 @@ class JarvisGUI:
         
         def set_model():
             selected = model_var.get()
+            self.current_model = selected
+            self.memory["current_model"] = selected
+            save_memory(self.memory)
             self.log(f"[Model] Switched to: {selected}")
             dialog.destroy()
         
@@ -4100,8 +4106,11 @@ class JarvisGUI:
                 self.message_id = self.increment_message_id()
                 thinking_output = []
                 
-                # Clear thinking box before new query
-                self.thinking_text.delete(1.0, tk.END)
+                # Clear thinking box before new query and add header
+                self.thinking_text.after(0, lambda: (
+                    self.thinking_text.delete(1.0, tk.END),
+                    self.thinking_text.insert(tk.END, f"--- [Msg #{self.message_id}] Processing ---\n\n")
+                ))
                 
                 # Define chunk callback with tkinter after(0) for thread safety
                 def update_thinking(chunk):
@@ -4135,18 +4144,13 @@ class JarvisGUI:
                     # Fallback to Ollama
                     response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model, chunk_callback=update_thinking)
                 
-                # Extract thinking content from response if present
+                # Extract thinking content from response if present (for saving to history)
                 thinking_content, response = extract_thinking_content(response)
                 
-                # If thinking content was extracted, update the thinking panel with it instead of the full response
+                # Note: Don't clear and re-display thinking content here
+                # The streaming chunks are already displayed in real-time via chunk_callback
+                # Only update thinking_output for saving to history
                 if thinking_content:
-                    # Clear the thinking panel and show only the extracted thinking
-                    self.thinking_text.delete(1.0, tk.END)
-                    if hasattr(self, 'thinking_window') and self.thinking_window.winfo_exists():
-                        self.thinking_window_text.delete(1.0, tk.END)
-                    self.append_thinking(f"\n--- [Msg #{self.message_id}] Thinking Process ---\n")
-                    self.append_thinking(thinking_content + "\n")
-                    # Update thinking_output for saving
                     thinking_output = [thinking_content]
 
             self.show_thinking_animation(False)
@@ -4188,8 +4192,8 @@ class JarvisGUI:
 
         normalized_text = text.lower()
 
-        if source == "text":
-            self.log(f"You (typed): {text}")
+        # Note: Text input is already logged in on_send(), don't log again here
+        # This prevents duplicate "You (typed):" messages
 
         if source == "interrupt":
             self.interrupt_event.set()
