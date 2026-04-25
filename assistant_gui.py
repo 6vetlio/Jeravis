@@ -4245,18 +4245,20 @@ class JarvisGUI:
                 self.message_id = self.increment_message_id()
                 thinking_output = []
                 
-                # Clear thinking box before new query and add header
-                self.thinking_text.after(0, lambda: (
-                    self.thinking_text.delete(1.0, tk.END),
-                    self.thinking_text.insert(tk.END, f"--- [Msg #{self.message_id}] Processing ---\n\n")
-                ))
+                # Clear thinking box before new query and add header (only if thinking panel is open)
+                if hasattr(self, 'thinking_text') and self.thinking_text and self.thinking_text.winfo_exists():
+                    self.thinking_text.after(0, lambda: (
+                        self.thinking_text.delete(1.0, tk.END),
+                        self.thinking_text.insert(tk.END, f"--- [Msg #{self.message_id}] Processing ---\n\n")
+                    ))
                 
                 # Define chunk callback with tkinter after(0) for thread safety
                 def update_thinking(chunk):
-                    self.thinking_text.after(0, lambda c=chunk: (
-                        self.thinking_text.insert("end", c),
-                        self.thinking_text.see("end")
-                    ))
+                    if hasattr(self, 'thinking_text') and self.thinking_text and self.thinking_text.winfo_exists():
+                        self.thinking_text.after(0, lambda c=chunk: (
+                            self.thinking_text.insert("end", c),
+                            self.thinking_text.see("end")
+                        ))
                 
                 # Check which API provider to use
                 try:
