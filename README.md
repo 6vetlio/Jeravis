@@ -1,43 +1,128 @@
-# Jarvis - Local AI Voice Assistant
+# Jarvis - Advanced Local AI Assistant
 
-A local AI voice assistant powered by Ollama, Kokoro TTS, and Whisper voice input. Jarvis runs entirely on your local machine with no cloud dependencies for core functionality.
+A powerful local AI voice assistant with multi-model routing, vision analysis, autonomous thinking, and PC control. Jarvis runs entirely on your local machine with no cloud dependencies for core functionality.
 
 ## Features
 
-- **Local AI**: Powered by Ollama's `qwen2.5:7b` model
+### AI & Models
+- **Multi-Model Routing**: Automatically selects best model based on query complexity
+  - `qwen2.5:7b` - Fast queries, weather, simple greetings
+  - `qwen2.5:14b` - Medium complexity, general purpose
+  - `qwen2.5:32b` - Complex/long queries, detailed analysis (last resort)
+  - `qwen2.5-coder:32b-instruct-q4_K_M` - Coding/programming queries
+  - `llava:latest` - Vision/image analysis
+- **Smart Model Selection**: Routes coding queries to coding model, complex to 32b, fast to 7b
+- **GPU Optimization**: Configurable GPU layer allocation per model (optimized for RTX 4070 12GB VRAM)
+- **Model Unloading**: Automatically unloads models on app close to free RAM
+- **External API Support**: OpenAI, Anthropic, Kimi, SWE API integration
+
+### Voice & Audio
 - **Voice Input**: Whisper-based speech recognition via SpeechRecognition
-- **Voice Output**: Kokoro TTS with `af_heart` voice
-- **Direct Skills**: Weather (wttr.in) and location (ipinfo.io) lookups without LLM routing
-- **Persistent Memory**: Remembers facts across sessions via `memory.json`
-- **PC Control**: PowerShell subprocess for local computer control
+- **Voice Output**: Kokoro TTS with multiple voices and speed control
 - **Interruptible**: Can be interrupted mid-speech with voice commands
 - **Fuzzy Wake Word**: Supports aliases like "Dioris" for wake-word detection
-- **Conversationally Persistent**: Non-prompt-based, keeps conversation flowing
+- **Voice Speed Control**: Adjustable playback speed (1.0x, 1.5x, 2.0x, 3.0x, skip mode)
+- **Microphone Selection**: Auto-selects from available microphones
+
+### Vision & Screenshots
+- **Screenshot Analysis**: Capture and analyze screenshots with vision model
+- **Screenshot Verification**: Pre/post-action screenshots for PC action verification
+- **Vision Toggle**: Enable/disable vision verification mode
+- **Screenshot History**: View recent screenshots with descriptions
+
+### Autonomous Mode
+- **Independent Thinking**: Jarvis thinks proactively without user input
+- **Custom Prompts**: Configurable autonomous thinking prompts
+- **Circuit Breaker**: Auto-pauses after 3 consecutive errors to prevent loops
+- **Manual Control**: Pause/resume autonomous mode via GUI
+- **Thinking Display**: Real-time thinking process visualization
+
+### Safety & Security
+- **Sandbox Mode**: Simulates PC actions without execution
+- **File Protection**: Configurable file operation safety
+- **Action Confirmation**: Require confirmation before executing PC actions
+- **Action Logging**: Detailed logging of all PC actions
+- **Rollback Support**: Revert to previous settings if needed
+- **Safety Mode Toggle**: Enable/disable safety guidelines
+
+### PC Control
+- **PowerShell Execution**: Execute commands on local machine
+- **Network Isolation**: Sandbox network access for security
+- **Action Queue**: Multi-task processing with queue management
+- **IDE Integration**: Built-in code editor with save/open functionality
+- **File Operations**: Create, edit, save files via PC actions
+
+### Memory & Knowledge
+- **Persistent Memory**: Remembers facts across sessions via `memory.json`
+- **Personality Learning**: Adapts personality based on user feedback
+- **Key Moments**: Records important conversation moments
+- **Conversation History**: Full chat history with timestamps
+- **Memory Management**: Add, view, and manage stored facts
+
+### GUI Features
+- **Full Button Bar**: Roll, Net, Log, Conf, Mem, Model, DB, API, WS, Stats, Export, Mini, Sound, Theme, Cmds, Plugins, Search, Prompts, Undo, Vis
+- **Theme System**: Multiple themes (Dark, Light, Cyberpunk) with custom theme support
+- **Mini Mode**: Compact UI for reduced screen space
+- **Sound Effects**: Toggle UI sound effects
+- **Status Bar**: Real-time RAM/VRAM monitoring, safety status, autonomous mode status
+- **Thinking Panel**: Separate window for thinking process visualization
+- **Quick Actions**: Predefined shortcuts for common tasks
+
+### Advanced Features
+- **Direct Skills**: Weather (wttr.in) and location (ipinfo.io) without LLM routing
+- **Music Control**: Play/stop YouTube music via voice commands
+- **Image Generation**: Generate images via Stable Diffusion
+- **WebSocket Support**: Enable/disable WebSocket server for remote access
+- **API Server**: Enable/disable Flask API for web interface
+- **Database**: Persistent storage for extended functionality
+- **Plugins**: Extensible plugin system
+- **Voice Commands**: Custom voice command shortcuts
+- **Search**: Search through conversation history
+- **Export**: Export settings and conversation history
+
+### Monitoring & Debugging
+- **RAM/VRAM Monitoring**: Real-time system resource usage in status bar
+- **Statistics**: View usage statistics and metrics
+- **Debug Logging**: Detailed debug log for troubleshooting
+- **Auto Copy**: Auto-copy conversation log to debug file
+- **Error Handling**: Robust error handling with fallback mechanisms
 
 ## Requirements
 
 - Python 3.11
-- Ollama with `qwen2.5:7b` model installed
+- Ollama with models installed (qwen2.5:7b, qwen2.5:14b, qwen2.5:32b, qwen2.5-coder:32b-instruct-q4_K_M, llava:latest)
 - Windows (PowerShell for PC control)
-- Microphone (device index 1 configured for Steinberg UR22mkII)
+- Microphone
+- RTX 4070 (12GB VRAM) or equivalent GPU recommended for large models
+- 32GB RAM recommended for 32B models
 
 ## Installation
 
 1. Install Ollama: https://ollama.com
-2. Pull the required model:
+2. Pull required models:
    ```powershell
    ollama pull qwen2.5:7b
+   ollama pull qwen2.5:14b
+   ollama pull qwen2.5:32b
+   ollama pull qwen2.5-coder:32b-instruct-q4_K_M
+   ollama pull llava:latest
    ```
 3. Install Python dependencies:
    ```powershell
-   pip install ollama kokoro-onnx sounddevice SpeechRecognition requests pyperclip pillow
+   pip install ollama kokoro-onnx sounddevice SpeechRecognition requests pyperclip pillow psutil
    ```
 4. Download Kokoro TTS models (not included in repository due to size):
    - Download `kokoro-v1.0.onnx` (~325MB) and `voices-v1.0.bin` (~28MB)
-   - Place both files in the same directory as `assistant.py`
+   - Place both files in the same directory as `assistant_gui.py`
    - Model source: https://github.com/remsky/Kokoro-FastAPI
 
 ## Usage
+
+### GUI Version (Recommended)
+Run Jarvis with the full graphical interface:
+```powershell
+py -3.11 C:\Users\svet\Documents\GitHub\Жаравиз\assistant_gui.py
+```
 
 ### CLI Version (No GUI)
 Run Jarvis in the terminal:
@@ -45,30 +130,37 @@ Run Jarvis in the terminal:
 py -3.11 C:\Users\svet\Documents\GitHub\Жаравиз\assistant.py
 ```
 
-### GUI Version
-Run Jarvis with a graphical interface:
-```powershell
-py -3.11 C:\Users\svet\Documents\GitHub\Жаравиз\assistant_gui.py
-```
-
-The GUI includes:
-- Conversation history display
-- Text input field with Enter to send
-- Voice enable/disable toggle button
-- Status indicator (Ready, Listening, Processing)
-- Dark theme interface
-- Copy log button (copies conversation to clipboard)
-- Screenshot button (captures screen to file)
-
-**Note:** The current model (qwen2.5:7b) does not support vision. Screenshots are saved to files but not analyzed. For full vision capabilities like Gemini, you would need a vision-capable model like llava from Ollama.
-
-Activate Jarvis by saying **"Jarvis"** or using the fuzzy aliases:
+### Voice Activation
+Activate Jarvis by saying **"Jarvis"** or using fuzzy aliases:
 - "Jervis"
 - "Jarves"
 - "Jarviss"
 - "Dioris" (common misrecognition)
 
 You can also type messages directly without the wake word.
+
+## Model Configuration
+
+### GPU Layer Allocation
+Models are configured with specific GPU layer allocations optimized for RTX 4070 12GB VRAM:
+
+```python
+MODEL_CONFIG = {
+    "qwen2.5:7b": {"num_gpu": 99, "num_thread": 8},
+    "qwen2.5:14b": {"num_gpu": 99, "num_thread": 8},
+    "qwen2.5:32b": {"num_gpu": 33, "num_thread": 8, "num_ctx": 2048},  # Reduced to prevent OOM
+    "qwen2.5-coder:32b-instruct-q4_K_M": {"num_gpu": 33, "num_thread": 8, "num_ctx": 2048},
+    "llava:latest": {"num_gpu": 99, "num_thread": 8},
+}
+```
+
+### Smart Routing Logic
+Queries are automatically routed to the appropriate model:
+- **Simple queries** (< 20 chars, weather, greetings) → qwen2.5:7b
+- **Coding queries** → qwen2.5-coder:32b-instruct-q4_K_M
+- **Complex queries** (> 200 chars, "comprehensive", "in-depth") → qwen2.5:32b
+- **Medium complexity** (> 100 chars, "explain", "analyze") → qwen2.5:14b
+- **Default** → qwen2.5:14b
 
 ## Direct Skills
 
@@ -92,14 +184,41 @@ Jarvis can execute PowerShell commands on your local machine. Prefix commands wi
 Jarvis: [PC_ACTION]: Get-Process
 ```
 
+### Safety Features
+- **Sandbox Mode**: Simulates actions without execution
+- **File Protection**: Configurable file operation safety
+- **Action Confirmation**: Require confirmation before execution
+- **Action Logging**: Detailed logging of all actions
+- **Screenshot Verification**: Pre/post-action screenshots for verification
+
+## Autonomous Mode
+
+Jarvis can think independently without user input:
+
+- **Proactive Thinking**: Thinks about what could help the user
+- **Custom Prompts**: Configurable thinking prompts (proactive, reactive, creative)
+- **Circuit Breaker**: Auto-pauses after 3 consecutive errors to prevent loops
+- **Manual Control**: Pause/resume via Auto button in GUI
+- **Thinking Display**: Real-time visualization of thinking process
+
 ## Configuration
 
-Key constants in `assistant.py`:
+Key constants in `assistant_gui.py`:
 
 ```python
+# Models
 OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_SECONDARY_MODEL = "qwen2.5:14b"
+OLLAMA_LARGE_MODEL = "qwen2.5:32b"
+OLLAMA_CODING_MODEL = "qwen2.5-coder:32b-instruct-q4_K_M"
+VISION_MODEL = "llava:latest"
+
+# Ollama Settings
 OLLAMA_HOST = "http://127.0.0.1:11434"
-OLLAMA_KEEP_ALIVE = "30m"  # Keep model warm for faster follow-ups
+OLLAMA_KEEP_ALIVE = "5m"  # Keep model warm for 5 minutes
+OLLAMA_RETRY_COUNT = 3
+
+# Voice Settings
 MIC_CALIBRATION_SECONDS = 0.6
 LISTEN_TIMEOUT_SECONDS = 6
 LISTEN_PHRASE_LIMIT_SECONDS = 16
@@ -108,77 +227,21 @@ WAKE_WORD = "jarvis"
 WAKE_WORD_SIMILARITY_THRESHOLD = 0.72
 ```
 
-## Voice Input Tuning
-
-SpeechRecognition thresholds configured for natural conversation flow:
-
-```python
-recognizer.pause_threshold = 0.6
-recognizer.non_speaking_duration = 0.35
-recognizer.phrase_threshold = 0.25
-```
-
-These values reduce premature cutoffs while maintaining responsiveness.
-
-## Robustness Features
-
-### Ollama Error Handling
-- Automatic Ollama startup if not running
-- Retry logic (3 attempts) for failed requests
-- Specific error messages for missing model vs connection issues
-- Model warmup on startup for faster first response
-
-### Voice Input Filtering
-- Ignores junk transcripts (single characters, non-meaningful input)
-- Fuzzy wake-word matching handles common misrecognitions
-- Voice listener pauses while TTS is speaking
-
-### TTS Safety
-- `prepare_tts_text()` caps output length to avoid phoneme limit crashes
-- TTS exceptions caught gracefully without crashing response worker
-- Weather text normalization fixes encoding artifacts (e.g., `Â°C` → `degrees Celsius`)
-- Country code expansion (e.g., `nl` → `Netherlands`)
-
-### Memory Protection
-- `normalize_memory()` protects against malformed `memory.json`
-- UTF-8 read/write for memory file
-- Graceful handling of missing/corrupted memory
-
-### Clean Shutdown
-- KeyboardInterrupt handling without traceback
-- Proper thread cleanup
-
-## Memory System
-
-Jarvis stores facts in `memory.json`:
-
-```json
-{
-  "facts": [],
-  "conversation_count": 0
-}
-```
-
-Facts are included in the system prompt and referenced naturally in conversation.
-
-## System Prompt Behavior
-
-Jarvis is configured to:
-- Be witty, direct, confident, and occasionally dry-humoured
-- Avoid generic chatbot limitation disclaimers
-- Use `[PC_ACTION]` only for explicit local PC actions
-- Reply in English by default unless asked otherwise
-- Remember and reference facts naturally
-
 ## Troubleshooting
 
 ### "Can't find my brain" Error
 - Ensure Ollama is running: check if `ollama.exe` is accessible
-- Verify `qwen2.5:7b` model is installed: `ollama pull qwen2.5:7b`
+- Verify models are installed: `ollama pull qwen2.5:7b`
 - Check Ollama is accessible at `http://127.0.0.1:11434`
 
+### Model OOM Crashes (Status 500)
+- Large models (32B) may exceed VRAM on 8GB cards
+- Jarvis automatically falls back to qwen2.5:7b on crash
+- GPU layer allocation is reduced for 32B models to prevent OOM
+- Use 14B model instead for medium complexity queries
+
 ### Voice Cutoffs
-- If Jarvis cuts you off too early, the thresholds can be adjusted:
+- If Jarvis cuts you off too early, adjust thresholds:
   - Increase `LISTEN_PHRASE_LIMIT_SECONDS` (currently 16)
   - Increase `pause_threshold` (currently 0.6)
   - Increase `non_speaking_duration` (currently 0.35)
@@ -196,6 +259,12 @@ Jarvis is configured to:
 - Verify API services are accessible (no blocking)
 - Check timeout settings: `WEATHER_TIMEOUT_SECONDS = 4`, `LOCATION_TIMEOUT_SECONDS = 4`
 
+### High RAM Usage
+- Models are kept in memory for 5 minutes after use (OLLAMA_KEEP_ALIVE)
+- Jarvis automatically unloads models on app close
+- Use smaller models (7B, 14B) for frequent queries
+- 32B models require ~20GB RAM, ensure sufficient system memory
+
 ## Hardware Context
 
 Tested on:
@@ -205,65 +274,28 @@ Tested on:
 
 ## Development History
 
-### Initial Setup
-- Basic Ollama integration with `qwen2.5:7b`
-- Kokoro TTS with `af_heart` voice
-- Whisper voice input via SpeechRecognition
-- PowerShell subprocess for PC control
-- Persistent memory via `memory.json`
+### Phase 1: Critical Bug Fixes (Latest)
+- Fixed thinking box streaming with chunk_callback and tkinter after(0)
+- Fixed qwen2.5:32b VRAM OOM by reducing GPU layers and context window
+- Demoted qwen2.5:32b to only trigger on explicitly complex queries
+- Added llama runner crash (status 500) detection and fallback to qwen2.5:7b
+- Added autonomous mode circuit breaker (pause after 3 consecutive errors)
+- Confirmed codellama:34b removal (replaced with qwen2.5-coder:32b-instruct-q4_K_M)
 
-### Latency Reduction
-- Removed repeated per-loop microphone recalibration
-- Mic now calibrates once at startup
-- Tuned SpeechRecognition thresholds for faster end-of-speech detection
-- Added `OLLAMA_KEEP_ALIVE = "30m"` and background warmup
-- Avoids saying 'Yes?' when the same utterance already contains the full request
-
-### Direct Skills
-- Added direct weather skill using `wttr.in` via `requests`
-- Added direct location skill using `ipinfo.io`
-- Bypasses LLM for faster, more accurate responses
-
-### Conversation Persistence
-- Refactored main loop into persistent conversation mode
-- Background response worker with interrupt support
-- `speaking_event` and `interrupt_event` for TTS and input coordination
-- Streaming Ollama responses with keep-alive
-
-### Wake Word Hardening
-- Fuzzy wake-word detection using `difflib.SequenceMatcher`
-- Aliases: "jarvis", "jervis", "jarves", "jarviss", "dioris"
-- Similarity threshold: 0.72
-
-### Robustness Improvements
-- `normalize_memory()` protects against malformed `memory.json`
-- Resilient Ollama startup with retries
-- `ask_ollama()` retries instead of failing on first exception
-- Safer Ollama response parsing via `extract_ollama_content()`
-- Specific error messages for missing model vs connection issues
-- UTF-8 memory file read/write
-- Clean KeyboardInterrupt handling
-
-### Stream Assembly Fix
-- Fixed streamed Ollama response assembly by preserving chunk spacing
-- Previously words were smashed together without spaces
-
-### TTS Safety
-- Added `prepare_tts_text()` and `MAX_TTS_CHARS` to cap spoken output
-- Prevents Kokoro phoneme limit crashes
-- `speak()` now catches TTS exceptions instead of crashing response worker
-- Weather text normalization fixes encoding artifacts
-- Country code expansion for natural speech
-
-### Voice Input Filtering
-- Added `is_meaningful_voice_text()` to ignore junk transcripts
-- Filters single-character and non-meaningful recognitions
-- Wake-word matching still supports fuzzy aliases
-
-### Voice Timing Tune
-- Increased `LISTEN_PHRASE_LIMIT_SECONDS` from 12 to 16
-- Relaxed speech-end thresholds: `pause_threshold=0.6`, `non_speaking_duration=0.35`, `phrase_threshold=0.25`
-- Reduces premature voice cutoffs
+### Previous Features
+- Multi-model routing with smart selection
+- RAM/VRAM monitoring in status bar
+- Model unloading on app close
+- GPU layer allocation optimization
+- Connection reset error handling
+- Autonomous mode with thinking display
+- Sandbox mode and file protection
+- Vision analysis with llava
+- Screenshot verification system
+- Theme system and mini mode
+- Plugin system and voice commands
+- WebSocket and API server support
+- IDE integration with code editor
 
 ## License
 
