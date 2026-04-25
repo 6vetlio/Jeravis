@@ -43,12 +43,25 @@ MEMORY_FILE = os.path.join(os.path.dirname(__file__), "memory.json")
 CONVERSATION_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "conversation_history.txt")
 SCREENSHOTS_JSON_FILE = os.path.join(os.path.dirname(__file__), "screenshots.json")
 OLLAMA_MODEL = "qwen2.5:7b"
-VISION_MODEL = "llava"
+OLLAMA_SECONDARY_MODEL = "qwen2.5:14b"
+OLLAMA_CODING_MODEL = "qwen2.5-coder:32b-instruct-q4_K_M"
+OLLAMA_LARGE_MODEL = "qwen2.5:32b"
+VISION_MODEL = "llava:latest"
 OLLAMA_HOST = "http://127.0.0.1:11434"
 OLLAMA_EXE = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
 OLLAMA_STARTUP_TIMEOUT_SECONDS = 20
 OLLAMA_RETRY_COUNT = 3
 OLLAMA_KEEP_ALIVE = "30m"
+
+# GPU layer allocation per model (optimized for RTX 4070 12GB VRAM)
+# Lower values for larger models to prevent OOM, higher for smaller models for speed
+GPU_LAYERS_PER_MODEL = {
+    OLLAMA_MODEL: 999,  # 7b model - use full GPU for speed
+    OLLAMA_SECONDARY_MODEL: 500,  # 14b model - moderate GPU usage
+    OLLAMA_LARGE_MODEL: 300,  # 32b model - limited GPU to prevent OOM
+    OLLAMA_CODING_MODEL: 300,  # 32b coding model - limited GPU to prevent OOM
+    VISION_MODEL: 500,  # vision model - moderate GPU usage
+}
 MIC_CALIBRATION_SECONDS = 0.6
 LISTEN_TIMEOUT_SECONDS = 6
 LISTEN_PHRASE_LIMIT_SECONDS = 16
@@ -239,6 +252,39 @@ def speak(engine: Kokoro, text: str, speaking_event=None, interrupt_event=None, 
     finally:
         if speaking_event is not None:
             speaking_event.clear()
+
+
+def is_coding_query(query: str) -> bool:
+    """Check if query is coding-related"""
+    coding_keywords = [
+        "code", "function", "class", "python", "javascript", "unity", "c#", "script",
+        "debug", "compile", "syntax", "variable", "array", "loop", "algorithm",
+        "api", "database", "sql", "json", "xml", "html", "css", "react", "vue",
+        "git", "github", "repository", "commit", "branch", "merge", "pull",
+        "docker", "kubernetes", "linux", "windows", "mac", "terminal", "command"
+    ]
+    lowered = query.lower()
+    return any(keyword in lowered for keyword in coding_keywords)
+
+
+def select_model_for_query(query: str) -> str:
+    """Select the best model based on query complexity and type"""
+    lowered = query.lower()
+    
+    # Fast queries: weather, simple greetings, basic questions
+    if is_weather_query(query) or len(query) < 20 or lowered in ["hi", "hello", "hey", "thanks", "thank you"]:
+        return OLLAMA_MODEL  # qwen2.5:7b - fastest
+    
+    # Coding queries: use coding model
+    if is_coding_query(query):
+        return OLLAMA_CODING_MODEL  # qwen2.5-coder:32b-instruct-q4_K_M
+    
+    # Complex/long queries: use large model
+    if len(query) > 100 or any(word in lowered for word in ["explain", "analyze", "complex", "detailed", "comprehensive"]):
+        return OLLAMA_LARGE_MODEL  # qwen2.5:32b
+    
+    # Default: secondary model for general purpose
+    return OLLAMA_SECONDARY_MODEL  # qwen2.5:14b
 
 
 def is_weather_query(query: str) -> bool:
@@ -649,11 +695,17 @@ def save_screenshot_metadata(filename: str, description: str, context: str):
         print(f"[Screenshot JSON error] Failed to save metadata: {e}")
 
 
-def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, safety_mode=True) -> str:
+def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, safety_mode=True, custom_model=None) -> str:
     memory = normalize_memory(memory)
     memory_text = "\n".join(f"- {f}" for f in memory["facts"]) or "Nothing stored yet."
     key_moments = load_key_moments(5)
     key_moments_text = "\n".join(key_moments) or "No key moments recorded."
+    
+    # Select model based on query complexity if no custom model specified
+    model = custom_model or select_model_for_query(prompt)
+    
+    # Get GPU layers for this model
+    gpu_layers = GPU_LAYERS_PER_MODEL.get(model, 999)
     
     safety_status = "ENABLED" if safety_mode else "DISABLED"
     system = SYSTEM_PROMPT.format(
@@ -681,10 +733,11 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, s
                 break
 
             response = ollama.chat(
-                model=OLLAMA_MODEL,
+                model=model,
                 messages=messages,
                 stream=True,
                 keep_alive=OLLAMA_KEEP_ALIVE,
+                options={"num_gpu": gpu_layers}
             )
             chunks = []
             for chunk in response:
