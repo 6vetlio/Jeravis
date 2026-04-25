@@ -11,6 +11,12 @@ import sounddevice as sd
 import ollama
 from PIL import ImageGrab
 
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
 # Configure GPU acceleration for Ollama
 os.environ["OLLAMA_NUM_GPU"] = "1"
 os.environ["OLLAMA_GPU_LAYERS"] = "999"
@@ -84,13 +90,13 @@ OLLAMA_RETRY_COUNT = 3
 OLLAMA_KEEP_ALIVE = "30m"
 
 # GPU layer allocation per model (optimized for RTX 4070 12GB VRAM)
-# Lower values for larger models to prevent OOM, higher for smaller models for speed
-GPU_LAYERS_PER_MODEL = {
-    OLLAMA_MODEL: 999,  # 7b model - use full GPU for speed
-    OLLAMA_SECONDARY_MODEL: 500,  # 14b model - moderate GPU usage
-    OLLAMA_LARGE_MODEL: 300,  # 32b model - limited GPU to prevent OOM
-    OLLAMA_CODING_MODEL: 300,  # 32b coding model - limited GPU to prevent OOM
-    VISION_MODEL: 500,  # vision model - moderate GPU usage
+# Use num_gpu: 99 to let Ollama decide layer split, not hardcoded values
+MODEL_CONFIG = {
+    OLLAMA_MODEL: {"num_gpu": 99, "num_thread": 8},
+    OLLAMA_SECONDARY_MODEL: {"num_gpu": 99, "num_thread": 8},
+    OLLAMA_LARGE_MODEL: {"num_gpu": 99, "num_thread": 8},
+    OLLAMA_CODING_MODEL: {"num_gpu": 99, "num_thread": 8},
+    VISION_MODEL: {"num_gpu": 99, "num_thread": 8},
 }
 
 # External API Configuration
@@ -819,6 +825,36 @@ def speak(engine: Kokoro, text: str, speaking_event=None, interrupt_event=None, 
             speaking_event.clear()
 
 
+def get_system_stats() -> str:
+    """Get current RAM and VRAM usage for status bar"""
+    if not HAS_PSUTIL:
+        return "Stats: psutil not installed"
+    
+    try:
+        # RAM usage
+        ram = psutil.virtual_memory()
+        ram_used = ram.used / 1024**3
+        ram_total = ram.total / 1024**3
+        
+        # VRAM usage via nvidia-smi
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                vram_used, vram_total = result.stdout.strip().split(", ")
+                vram_used_gb = int(vram_used) / 1024
+                vram_total_gb = int(vram_total) / 1024
+                return f"RAM: {ram_used:.1f}/{ram_total:.0f}GB | VRAM: {vram_used_gb:.1f}/{vram_total_gb:.0f}GB"
+        except Exception:
+            pass
+        
+        return f"RAM: {ram_used:.1f}/{ram_total:.0f}GB | VRAM: N/A"
+    except Exception as e:
+        return f"Stats: {e}"
+
+
 def is_weather_query(query: str) -> bool:
     return bool(re.search(r"\b(weather|forecast|temperature|rain|raining|snow|snowing|sunny|windy)\b", query, re.IGNORECASE))
 
@@ -1530,8 +1566,8 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, s
     memory_text = "\n".join(f"- {f}" for f in memory["facts"]) or "Nothing stored yet."
     key_moments = load_key_moments(5)
     
-    # Get GPU layers for this model
-    gpu_layers = GPU_LAYERS_PER_MODEL.get(model, 999)
+    # Get model config (GPU layers, threads)
+    model_config = MODEL_CONFIG.get(model, {"num_gpu": 99, "num_thread": 8})
     key_moments_text = "\n".join(key_moments) or "No key moments recorded."
     
     safety_status = "ENABLED" if safety_mode else "DISABLED"
@@ -1560,7 +1596,11 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, s
                 messages=messages,
                 stream=True,
                 keep_alive=OLLAMA_KEEP_ALIVE,
-                options={"num_gpu": gpu_layers}
+                options={
+                    "num_gpu": model_config["num_gpu"],
+                    "num_thread": model_config["num_thread"],
+                    "num_predict": 1024,  # Cap output to prevent infinite runs
+                }
             )
             chunks = []
             for chunk in response:
@@ -1580,6 +1620,37 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None, s
                 return content
 
             last_error = RuntimeError("Ollama returned an empty response.")
+        except ConnectionResetError as e:
+            last_error = e
+            # Connection reset - try fallback to smaller model on last attempt
+            if attempt == OLLAMA_RETRY_COUNT - 1 and model != OLLAMA_MODEL:
+                print(f"[!] Connection reset with {model}, falling back to {OLLAMA_MODEL}")
+                try:
+                    response = ollama.chat(
+                        model=OLLAMA_MODEL,
+                        messages=messages,
+                        stream=True,
+                        keep_alive=OLLAMA_KEEP_ALIVE,
+                        options={
+                            "num_gpu": MODEL_CONFIG[OLLAMA_MODEL]["num_gpu"],
+                            "num_thread": MODEL_CONFIG[OLLAMA_MODEL]["num_thread"],
+                            "num_predict": 1024,
+                        }
+                    )
+                    chunks = []
+                    for chunk in response:
+                        if interrupt_event is not None and interrupt_event.is_set():
+                            return INTERRUPTED_RESPONSE
+                        content_part = extract_ollama_content(chunk)
+                        if content_part:
+                            chunks.append(content_part)
+                            if thinking_callback:
+                                thinking_callback(content_part)
+                    content = "".join(chunks).strip()
+                    if content:
+                        return content
+                except Exception as fallback_error:
+                    last_error = fallback_error
         except Exception as e:
             last_error = e
 
@@ -2473,6 +2544,10 @@ class JarvisGUI:
         status.append(f"🧠 Power: {self.thinking_power}")
         status.append(f"⚡ Speed: {self.speech_speed}x")
         status.append(f"🎤 Voice: {'ON' if self.state.get('active') else 'OFF'}")
+        
+        # Add system stats (RAM/VRAM)
+        stats = get_system_stats()
+        status.append(f"💾 {stats}")
         
         self.status_label.config(text=" | ".join(status))
 
