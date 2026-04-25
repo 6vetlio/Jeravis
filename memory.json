@@ -2,11 +2,11 @@
   "facts": [
     "Hello! How can I assist you today? Just remember, I’m here to help with information and tasks that are safe and legal. I"
   ],
-  "conversation_count": 79,
+  "conversation_count": 80,
   "safety_mode": false,
   "file_protection": true,
-  "speech_speed": 2.0,
-  "sandbox_mode": true,
+  "speech_speed": null,
+  "sandbox_mode": false,
   "thinking_power": "creative",
   "vision_verification": false,
   "mini_mode": false,

@@ -143,7 +143,7 @@ Keep responses concise unless detail is explicitly needed.
 Answer like Jarvis, not a generic chatbot. Be conversational and engaging.
 Show personality: use natural language patterns, occasional humor, and emotional cues.
 
-IMPORTANT: When processing complex requests, show your thinking process in <thinking>...</thinking> tags before your final response. This helps the user understand your reasoning. Only include <thinking> tags when the request is complex or requires multi-step reasoning.
+IMPORTANT: ALWAYS show your thinking process in <thinking>...</thinking> tags before your final response. This helps the user understand your reasoning. Include your internal thoughts, reasoning steps, and any considerations that lead to your final answer. The thinking tags should contain your actual thought process, not the final response.
 
 Current date and time: {datetime}
 Your learned personality traits:
@@ -4326,11 +4326,39 @@ class JarvisGUI:
                 
                 # Extract thinking content from response if present (for saving to history)
                 try:
+                    self.log(f"[ResponseWorker] Step 3b: Extracting thinking content...")
                     thinking_content, response = extract_thinking_content(response)
+                    self.log(f"[ResponseWorker] Step 3b: thinking_content='{thinking_content[:50] if thinking_content else 'None'}...'")
                     if thinking_content:
                         thinking_output = [thinking_content]
+                        self.log(f"[ResponseWorker] Step 3b: Updating thinking panel with reasoning...")
+                        # Clear the thinking panel and display only the extracted reasoning thoughts
+                        if hasattr(self, 'thinking_text') and self.thinking_text and self.thinking_text.winfo_exists():
+                            self.thinking_text.after(0, lambda: (
+                                self.thinking_text.delete(1.0, tk.END),
+                                self.thinking_text.insert(tk.END, "--- Reasoning ---\n\n"),
+                                self.thinking_text.insert(tk.END, thinking_content),
+                                self.thinking_text.insert(tk.END, "\n\n--- Final Response ---\n\n"),
+                                self.thinking_text.see(tk.END)
+                            ))
+                            self.log(f"[ResponseWorker] Step 3b: Thinking panel updated")
+                        # Also update popup window if visible
+                        if self.thinking_panel_visible and hasattr(self, 'thinking_window') and self.thinking_window.winfo_exists():
+                            self.thinking_window_text.after(0, lambda: (
+                                self.thinking_window_text.delete(1.0, tk.END),
+                                self.thinking_window_text.insert(tk.END, "--- Reasoning ---\n\n"),
+                                self.thinking_window_text.insert(tk.END, thinking_content),
+                                self.thinking_window_text.insert(tk.END, "\n\n--- Final Response ---\n\n"),
+                                self.thinking_window_text.see(tk.END),
+                                self.thinking_window_text.update_idletasks()
+                            ))
+                            self.log(f"[ResponseWorker] Step 3b: Popup window updated")
+                    else:
+                        self.log(f"[ResponseWorker] Step 3b: No thinking content found in response")
                 except Exception as e:
                     self.log(f"[ResponseWorker ERROR] Step 3b (extract thinking): {e}")
+                    import traceback
+                    self.log(traceback.format_exc())
 
             self.show_thinking_animation(False)
 
