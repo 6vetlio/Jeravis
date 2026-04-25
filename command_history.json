@@ -1,0 +1,11 @@
+{
+  "commands": [
+    {
+      "timestamp": "2026-04-25T19:53:56.545119",
+      "command": "Open-Item \"C:\\Users\\{username}\\Pictures\\CatsContent.jpg\"",
+      "result": "Open-Item : The term 'Open-Item' is not recognized as the name of a cmdlet, function, script file, or operable \nprogram. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.\nAt line:1 char:1\n+ Open-Item \"C:\\Users\\{username}\\Pictures\\CatsContent.jpg\"\n+ ~~~~~~~~~\n    + CategoryInfo          : ObjectNotFound: (Open-Item:String) [], CommandNotFoundException\n    + FullyQualifiedErrorId : CommandNotFoundException\n \n",
+      "sandbox": false,
+      "reversible": false
+    }
+  ]
+}

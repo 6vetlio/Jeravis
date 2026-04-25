@@ -150,6 +150,8 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
     
     memory = normalize_memory(memory)
     memory_text = "\n".join(f"- {f}" for f in memory["facts"]) or "Nothing stored yet."
+    fact_count = len(memory["facts"])
+    print(f"[Memory] Loaded {fact_count} facts on startup")
     key_moments = load_key_moments(5)
     
     # Get model config (GPU layers, threads)
@@ -198,7 +200,9 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
                     if thinking_callback:
                         thinking_callback(content_part)
                     if chunk_callback:
-                        chunk_callback(content_part)
+                        # Stream character by character for real-time display
+                        for char in content_part:
+                            chunk_callback(char)
 
             if interrupt_event is not None and interrupt_event.is_set():
                 return INTERRUPTED_RESPONSE
@@ -235,7 +239,9 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
                             if thinking_callback:
                                 thinking_callback(content_part)
                             if chunk_callback:
-                                chunk_callback(content_part)
+                                # Stream character by character for real-time display
+                                for char in content_part:
+                                    chunk_callback(char)
                     content = "".join(chunks).strip()
                     if content:
                         return content
@@ -269,7 +275,9 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
                             if thinking_callback:
                                 thinking_callback(content_part)
                             if chunk_callback:
-                                chunk_callback(content_part)
+                                # Stream character by character for real-time display
+                                for char in content_part:
+                                    chunk_callback(char)
                     content = "".join(chunks).strip()
                     if content:
                         return content

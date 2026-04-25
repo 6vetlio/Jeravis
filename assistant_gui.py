@@ -134,6 +134,11 @@ THINKING_POWER_DEFAULT = "normal"
 SANDBOX_MODE_DEFAULT = False
 VISION_VERIFICATION_DEFAULT = True
 
+# Context window management
+MAX_CONTEXT_TOKENS = 256000  # 256k context window
+COMPACT_THRESHOLD = 0.8  # Trigger compaction at 80% of max context
+COMPACT_COUNTDOWN_SECONDS = 300  # 5 minutes before compaction executes
+
 SYSTEM_PROMPT = """You are Jarvis, a highly intelligent and loyal AI assistant with personality and emotion.
 You assist your user with various tasks and questions.
 You are witty, direct, confident, and occasionally dry-humoured. You never waffle.
@@ -143,7 +148,10 @@ Keep responses concise unless detail is explicitly needed.
 Answer like Jarvis, not a generic chatbot. Be conversational and engaging.
 Show personality: use natural language patterns, occasional humor, and emotional cues.
 
-IMPORTANT: ALWAYS show your thinking process in <thinking>...</thinking> tags before your final response. This helps the user understand your reasoning. Include your internal thoughts, reasoning steps, and any considerations that lead to your final answer. The thinking tags should contain your actual thought process, not the final response.
+ALWAYS start every response with your reasoning in this exact format:
+<thinking>
+[your reasoning here]
+</thinking>
 
 Current date and time: {datetime}
 Your learned personality traits:
@@ -1310,6 +1318,7 @@ def handle_direct_query(query: str, memory: dict) -> str | None:
         else:
             return "No screenshots saved yet."
 
+    # No direct query match - return None to route to LLM
     return None
 
 
@@ -1533,7 +1542,7 @@ def get_image_pipeline():
 def generate_image(prompt: str) -> str:
     pipeline = get_image_pipeline()
     if pipeline is None:
-        return "Image generation not available. Install diffusers and torch with: pip install diffusers torch"
+        return "No image model loaded. To enable image generation pull a model: ollama pull stable-diffusion"
 
     try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1874,11 +1883,73 @@ def process_response(response: str, memory: dict, speak_fn, interrupt_event=None
         else:
             speak_fn("Done.")
     else:
+        import re
+        response = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL).strip()
+        if log_callback:
+            log_callback(f"Jarvis: {response}")
         speak_fn(response)
 
-    lines = response.lower()
-    if "remember" in lines or "don't forget" in lines or "my name is" in lines:
-        add_memory_fact(response[:120], memory)
+def estimate_tokens(text: str) -> int:
+    """Estimate token count from text (approximate 4 chars per token)"""
+    return len(text) // 4
+
+
+def extract_facts_from_message(user_message: str) -> list:
+    """Extract facts about the user from their message using 7b model."""
+    from core.ollama import ask_ollama, OLLAMA_MODEL
+    from core.memory import load_memory, save_memory, add_memory_fact
+    import threading
+    
+    fact_extraction_prompt = "Extract any new facts about the user from this message only. If none, respond with NONE. Facts only, one per line, example: User likes cycling. User works on a project called Jarvis."
+    
+    try:
+        # Use 7b model for fact extraction (fast and efficient)
+        # Run in a separate thread with timeout to prevent blocking
+        result = [None]
+        error = [None]
+        
+        def extract_thread():
+            try:
+                response = ask_ollama(
+                    fact_extraction_prompt + "\n\nUser message: " + user_message,
+                    [],
+                    load_memory(),
+                    None,
+                    safety_mode=False,
+                    personality="",
+                    thinking_callback=None,
+                    use_secondary=False,
+                    custom_model=OLLAMA_MODEL
+                )
+                result[0] = response
+            except Exception as e:
+                error[0] = e
+        
+        thread = threading.Thread(target=extract_thread, daemon=True)
+        thread.start()
+        thread.join(timeout=5)  # 5 second timeout for fact extraction
+        
+        if thread.is_alive():
+            print(f"[Fact extraction] Timeout for message: {user_message[:50]}...")
+            return []
+        
+        if error[0]:
+            print(f"[Fact extraction error] Failed to extract facts: {error[0]}")
+            return []
+        
+        response = result[0]
+        
+        if response and response.strip().upper() != "NONE":
+            # Parse facts from response
+            facts = [line.strip() for line in response.strip().split('\n') if line.strip() and line.strip().upper() != "NONE"]
+            memory = load_memory()
+            for fact in facts:
+                add_memory_fact(fact, memory)
+            return facts
+        return []
+    except Exception as e:
+        print(f"[Fact extraction error] Failed to extract facts: {e}")
+        return []
 
 
 class JarvisGUI:
@@ -1929,8 +2000,14 @@ class JarvisGUI:
             self.message_id = 0
             self.autonomous_mode = False
             self.autonomous_paused = False
+            self.autonomous_cycle_count = 0
             self.thinking_power = self.memory.get("thinking_power", THINKING_POWER_DEFAULT)
             self.current_model = self.memory.get("current_model", OLLAMA_MODEL)  # Persist selected model
+            
+            # Context window management
+            self.context_tokens = 0
+            self.compact_countdown_start = None
+            self.compaction_active = False
             
             # Handle speech_speed conversion from memory (could be None, string, or float)
             speech_speed_from_memory = self.memory.get("speech_speed", SPEECH_SPEED_DEFAULT)
@@ -2060,6 +2137,28 @@ class JarvisGUI:
         )
         send_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
+        self.cancel_button = tk.Button(
+            button_row1,
+            text="✕ Cancel",
+            command=self.cancel_response,
+            bg="#8b0000",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            state=tk.DISABLED
+        )
+        self.cancel_button.pack(side=tk.RIGHT, padx=3, pady=3)
+
+        # Loading indicator (initially hidden)
+        self.loading_label = tk.Label(
+            button_row1,
+            text="⏳ Loading...",
+            fg="#ffaa00",
+            bg="#252526",
+            font=("Arial", 10)
+        )
+        # Don't pack initially - will be shown when needed
+
         copy_button = tk.Button(
             button_row1,
             text="📋 Copy",
@@ -2082,38 +2181,40 @@ class JarvisGUI:
         )
         screenshot_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        voice_select_button = tk.Button(
+        # Update button label to show current voice
+        voice_label = f"🎭 {self.kokoro_voice.replace('af_', '').title()}"
+        self.voice_select_button = tk.Button(
             button_row1,
-            text="🎭 Voice",
+            text=voice_label,
             command=self.cycle_voice,
             bg="#3c3c3c",
             fg="white",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        voice_select_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.voice_select_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        safety_button = tk.Button(
+        self.safe_button = tk.Button(
             button_row1,
             text="🔒 Safe",
             command=self.toggle_safety,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.safety_mode else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        safety_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.safe_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        file_protect_button = tk.Button(
+        self.file_prot_button = tk.Button(
             button_row1,
             text="📁 Files",
             command=self.toggle_file_protection,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.file_protection else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        file_protect_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.file_prot_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         image_button = tk.Button(
             button_row1,
@@ -2126,16 +2227,21 @@ class JarvisGUI:
         )
         image_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        speed_button = tk.Button(
+        # Update button label to show current speed
+        if self.speech_speed is None:
+            speed_label = "⚡ OFF"
+        else:
+            speed_label = f"⚡ {self.speech_speed}x"
+        self.speed_button = tk.Button(
             button_row1,
-            text="⏩ Speed",
+            text=speed_label,
             command=self.cycle_speech_speed,
             bg="#3c3c3c",
             fg="white",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        speed_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.speed_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         thinking_button = tk.Button(
             button_row1,
@@ -2148,16 +2254,16 @@ class JarvisGUI:
         )
         thinking_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        autonomous_button = tk.Button(
+        self.auto_button = tk.Button(
             button_row1,
             text="🤖 Auto",
             command=self.toggle_autonomous_mode,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.autonomous_mode else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        autonomous_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.auto_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         self.pause_button = tk.Button(
             button_row1,
@@ -2171,31 +2277,31 @@ class JarvisGUI:
         )
         self.pause_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        sandbox_button = tk.Button(
+        self.sandbox_button = tk.Button(
             button_row1,
             text="🔒 Sand",
             command=self.toggle_sandbox_mode,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.sandbox_mode else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        sandbox_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.sandbox_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         # Button row 2 - Feature buttons
         button_row2 = tk.Frame(input_frame, bg="#252526")
         button_row2.pack(fill=tk.X, padx=10, pady=(5, 10))
 
-        vision_button = tk.Button(
+        self.vision_button = tk.Button(
             button_row2,
             text="👁️ Vis",
             command=self.toggle_vision_verification,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.vision_verification else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        vision_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.vision_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         undo_button = tk.Button(
             button_row2,
@@ -2274,27 +2380,29 @@ class JarvisGUI:
         )
         ide_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        theme_button = tk.Button(
+        # Update button label to show current theme
+        theme_label = f"🎨 {self.current_theme.title()}"
+        self.theme_button = tk.Button(
             button_row2,
-            text="🎨 Theme",
+            text=theme_label,
             command=self.cycle_theme,
             bg="#3c3c3c",
             fg="white",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        theme_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.theme_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        sound_button = tk.Button(
+        self.sound_button = tk.Button(
             button_row2,
             text="🔊 Sound",
             command=self.toggle_sound_effects,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.sound_effects_enabled else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        sound_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.sound_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         mini_button = tk.Button(
             button_row2,
@@ -2329,38 +2437,38 @@ class JarvisGUI:
         )
         stats_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        websocket_button = tk.Button(
+        self.websocket_button = tk.Button(
             button_row2,
             text="🌐 WS",
             command=self.toggle_websocket,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.websocket_enabled else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        websocket_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.websocket_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        api_button = tk.Button(
+        self.api_button = tk.Button(
             button_row2,
             text="🔌 API",
             command=self.toggle_api,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.api_enabled else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        api_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.api_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        database_button = tk.Button(
+        self.database_button = tk.Button(
             button_row2,
             text="🗄️ DB",
             command=self.toggle_database,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.database_enabled else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        database_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.database_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         model_button = tk.Button(
             button_row2,
@@ -2384,38 +2492,38 @@ class JarvisGUI:
         )
         memory_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        confirmation_button = tk.Button(
+        self.confirmation_button = tk.Button(
             button_row2,
             text="✅ Conf",
             command=self.toggle_action_confirmation,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.action_confirmation_enabled else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        confirmation_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.confirmation_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        logging_button = tk.Button(
+        self.logging_button = tk.Button(
             button_row2,
             text="📝 Log",
             command=self.toggle_action_logging,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.action_logging_enabled else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        logging_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.logging_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
-        sandbox_net_button = tk.Button(
+        self.sandbox_net_button = tk.Button(
             button_row2,
             text="🔒 Net",
             command=self.toggle_sandbox_network,
             bg="#3c3c3c",
-            fg="white",
+            fg="#00ff00" if self.sandbox_network_isolation else "#ff0000",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        sandbox_net_button.pack(side=tk.RIGHT, padx=3, pady=3)
+        self.sandbox_net_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         rollback_button = tk.Button(
             button_row2,
@@ -2449,16 +2557,19 @@ class JarvisGUI:
         self.shortcuts_menu.pack(side=tk.RIGHT, padx=5, pady=10)
         self.shortcuts_menu.bind("<<ComboboxSelected>>", self.on_quick_action)
 
-        thinking_power_button = tk.Button(
+        # Update button label to show current power
+        power_labels = {"normal": "🧠 Normal", "deep": "🧠 Deep", "creative": "🧠 Creative"}
+        power_label = power_labels.get(self.thinking_power, "🧠 Normal")
+        self.thinking_power_button = tk.Button(
             input_frame,
-            text="🧠 Power",
+            text=power_label,
             command=self.cycle_thinking_power,
             bg="#3c3c3c",
             fg="white",
             font=("Arial", 10),
             relief=tk.FLAT
         )
-        thinking_power_button.pack(side=tk.RIGHT, padx=5, pady=10)
+        self.thinking_power_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
         # Voice control button
         self.voice_button = tk.Button(
@@ -2585,24 +2696,25 @@ class JarvisGUI:
         self.log("[Shutdown] Models unloaded. Goodbye!")
         self.root.destroy()
 
-    def log(self, message):
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.insert(tk.END, message + "\n")
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state=tk.DISABLED)
+    def log(self, message, debug=False):
+        if not debug:
+            self.chat_display.config(state=tk.NORMAL)
+            self.chat_display.insert(tk.END, message + "\n")
+            self.chat_display.see(tk.END)
+            self.chat_display.config(state=tk.DISABLED)
         self.debug_log.append(message)
         if len(self.debug_log) > 1000:
             self.debug_log = self.debug_log[-1000:]
 
     def copy_log(self):
         if not HAS_PYPERCLIP:
-            self.log("[Clipboard] pyperclip not installed. Install with: pip install pyperclip")
+            self.log("[Clipboard] pyperclip not installed. Install with: pip install pyperclip", debug=True)
             self.auto_copy_debug_to_file()
             return
 
         log_text = "\n".join(self.debug_log)
         pyperclip.copy(log_text)
-        self.log("[Clipboard] Conversation log copied to clipboard")
+        self.log("[Clipboard] Conversation log copied to clipboard", debug=True)
         self.auto_copy_debug_to_file()
 
     def auto_copy_debug_to_file(self):
@@ -2665,34 +2777,43 @@ class JarvisGUI:
 
     def on_send(self, event=None):
         text = self.input_entry.get().strip()
-        self.log(f"[on_send] Called with text: '{text[:50]}...'")
+        self.log(f"[on_send] Called with text: '{text[:50]}...'", debug=True)
         if text:
             self.input_entry.delete(0, tk.END)
             self.log(f"You (typed): {text}")
             self.input_queue.put(("text", text))
-            self.log(f"[on_send] Put ('text', '{text[:30]}...') into input_queue")
+            self.log(f"[on_send] Put ('text', '{text[:30]}...') into input_queue", debug=True)
         else:
-            self.log(f"[on_send] Empty text, ignoring")
+            self.log(f"[on_send] Empty text, ignoring", debug=True)
         return "break"
 
     def toggle_voice(self):
         self.voice_enabled = not self.voice_enabled
         if self.voice_enabled:
             self.voice_button.config(bg="#3c3c3c", text="🎤 Voice")
-            self.log("[Voice] Enabled")
+            self.log("[Voice] Enabled", debug=True)
         else:
             self.voice_button.config(bg="#8b0000", text="🔇 Muted")
-            self.log("[Voice] Disabled")
+            self.log("[Voice] Disabled", debug=True)
 
     def cycle_voice(self):
         current_index = KOKORO_VOICES.index(self.kokoro_voice)
         next_index = (current_index + 1) % len(KOKORO_VOICES)
         self.kokoro_voice = KOKORO_VOICES[next_index]
-        self.log(f"[Voice] Switched to {self.kokoro_voice}")
+        
+        # Update button label to show current voice
+        voice_label = f"🎭 {self.kokoro_voice.replace('af_', '').title()}"
+        self.voice_select_button.config(text=voice_label)
+        
+        self.log(f"[Voice] Switched to {self.kokoro_voice}", debug=True)
         speak(self.engine, f"Voice changed to {self.kokoro_voice.replace('af_', '').title()}", self.speaking_event, self.interrupt_event, self.log, self.kokoro_voice, self.speech_speed)
 
     def toggle_safety(self):
         self.safety_mode = not self.safety_mode
+        if self.safety_mode:
+            self.safe_button.config(fg="#00ff00")
+        else:
+            self.safe_button.config(fg="#ff0000")
         self.memory["safety_mode"] = self.safety_mode
         save_memory(self.memory)
         status = "ON" if self.safety_mode else "OFF"
@@ -2701,6 +2822,10 @@ class JarvisGUI:
 
     def toggle_file_protection(self):
         self.file_protection = not self.file_protection
+        if self.file_protection:
+            self.file_prot_button.config(fg="#00ff00")
+        else:
+            self.file_prot_button.config(fg="#ff0000")
         self.memory["file_protection"] = self.file_protection
         save_memory(self.memory)
         status = "ON" if self.file_protection else "OFF"
@@ -2718,11 +2843,18 @@ class JarvisGUI:
         next_index = (current_index + 1) % len(speeds)
         self.speech_speed = speeds[next_index]
         
+        # Update button label to show current speed
         if self.speech_speed is None:
-            self.log("[Speech] Skip mode - will stop current playback")
+            speed_label = "⚡ OFF"
+        else:
+            speed_label = f"⚡ {self.speech_speed}x"
+        self.speed_button.config(text=speed_label)
+        
+        if self.speech_speed is None:
+            self.log("[Speech] Skip mode - will stop current playback", debug=True)
             sd.stop()
         else:
-            self.log(f"[Speech] Speed set to {self.speech_speed}x")
+            self.log(f"[Speech] Speed set to {self.speech_speed}x", debug=True)
         
         self.memory["speech_speed"] = self.speech_speed
         save_memory(self.memory)
@@ -2754,11 +2886,11 @@ class JarvisGUI:
                 self.thinking_window.protocol("WM_DELETE_WINDOW", self.toggle_thinking_panel)
             else:
                 self.thinking_window.deiconify()
-            self.log("[Thinking] Panel visible")
+            self.log("[Thinking] Panel visible", debug=True)
         else:
             if hasattr(self, 'thinking_window') and self.thinking_window.winfo_exists():
                 self.thinking_window.withdraw()
-            self.log("[Thinking] Panel hidden")
+            self.log("[Thinking] Panel hidden", debug=True)
 
     def append_thinking(self, text: str, pace=False):
         """Append text to the thinking panel with optional pacing"""
@@ -2793,6 +2925,103 @@ class JarvisGUI:
         self.message_id += 1
         return self.message_id
 
+    def load_conversation_history_on_demand(self):
+        """Load conversation history from file only when explicitly requested"""
+        try:
+            if not os.path.exists(CONVERSATION_HISTORY_FILE):
+                self.log("[History] No conversation history file found.")
+                return
+            
+            with open(CONVERSATION_HISTORY_FILE, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            # Parse conversation history into message format
+            sections = content.split("[SESSION:")
+            loaded_history = []
+            
+            for section in sections[1:]:  # Skip first empty section
+                lines = section.split('\n')
+                if len(lines) >= 2:
+                    # Extract timestamp
+                    timestamp = lines[0].split(']')[0].strip() if ']' in lines[0] else ""
+                    
+                    # Extract user and assistant messages
+                    for i, line in enumerate(lines):
+                        if line.startswith("User: "):
+                            user_content = line[6:].strip()
+                            loaded_history.append({"role": "user", "content": user_content})
+                        elif line.startswith("Jarvis: ") and not line.startswith("Jarvis: ["):
+                            assistant_content = line[8:].strip()
+                            loaded_history.append({"role": "assistant", "content": assistant_content})
+            
+            if loaded_history:
+                self.history = loaded_history
+                self.log(f"[History] Loaded {len(loaded_history)} messages from conversation history.")
+                # Recalculate context tokens
+                self.context_tokens = sum(estimate_tokens(msg['content']) for msg in loaded_history)
+                self.log(f"[Context] Recalculated token count: {self.context_tokens}")
+            else:
+                self.log("[History] No valid messages found in conversation history.")
+        except Exception as e:
+            self.log(f"[History] Failed to load conversation history: {e}")
+            import traceback
+            self.log(traceback.format_exc())
+
+    def compact_conversation(self):
+        """Compact conversation history by summarizing old messages"""
+        try:
+            if len(self.history) < 10:
+                self.log("[Context] Not enough messages to compact yet.")
+                return
+            
+            # Keep recent 8 messages in full, summarize the rest
+            recent_messages = self.history[-8:]
+            old_messages = self.history[:-8]
+            
+            # Create summary from old messages
+            summary_prompt = "Summarize this conversation history in 2-3 sentences, focusing on key topics and information:\n\n"
+            for msg in old_messages:
+                summary_prompt += f"{msg['role']}: {msg['content']}\n"
+            
+            self.log("[Context] Generating summary of old messages...", debug=True)
+            from core.ollama import ask_ollama, OLLAMA_MODEL
+            summary = ask_ollama(summary_prompt, [], self.memory, None, False, "", None, False, OLLAMA_MODEL)
+            
+            # Rebuild history with summary + recent messages
+            self.history = [
+                {"role": "system", "content": f"Previous conversation summary: {summary}"},
+                *recent_messages
+            ]
+            
+            # Reset context tracking
+            self.context_tokens = estimate_tokens(summary)
+            for msg in recent_messages:
+                self.context_tokens += estimate_tokens(msg['content'])
+            
+            self.compact_countdown_start = None
+            self.compaction_active = False
+            
+            self.log(f"[Context] Compaction complete. Kept {len(recent_messages)} recent messages, summarized {len(old_messages)} old messages. New token count: {self.context_tokens}")
+        except Exception as e:
+            self.log(f"[Context] Compaction failed: {e}")
+            import traceback
+            self.log(traceback.format_exc())
+
+    def cancel_response(self):
+        """Cancel the current response generation"""
+        self.interrupt_event.set()
+        self.log("[Cancel] Stopping response generation...")
+        self.cancel_button.config(state=tk.DISABLED)
+        self.hide_loading_indicator()
+
+    def show_loading_indicator(self):
+        """Show loading indicator"""
+        self.loading_label.pack(side=tk.RIGHT, padx=3, pady=3)
+
+    def hide_loading_indicator(self):
+        """Hide loading indicator"""
+        self.loading_label.pack_forget()
+
     def on_quick_action(self, event=None):
         action = self.shortcuts_var.get()
         if action == "Open Browser":
@@ -2814,8 +3043,10 @@ class JarvisGUI:
     def toggle_safety_mode(self):
         self.safety_mode = not self.safety_mode
         if self.safety_mode:
+            self.safety_button.config(fg="#00ff00")
             self.log("[Safety] Mode ON")
         else:
+            self.safety_button.config(fg="#ff0000")
             self.log("[Safety] Mode OFF")
         self.memory["safety_mode"] = self.safety_mode
         save_memory(self.memory)
@@ -3315,6 +3546,10 @@ class JarvisGUI:
         next_index = (current_index + 1) % len(theme_names)
         self.current_theme = theme_names[next_index]
         
+        # Update button label to show current theme
+        theme_label = f"🎨 {self.current_theme.title()}"
+        self.theme_button.config(text=theme_label)
+        
         # Apply theme
         theme_data = self.themes[self.current_theme]
         apply_theme(theme_data, self)
@@ -3328,6 +3563,10 @@ class JarvisGUI:
     def toggle_sound_effects(self):
         """Toggle sound effects on/off"""
         self.sound_effects_enabled = not self.sound_effects_enabled
+        if self.sound_effects_enabled:
+            self.sound_button.config(fg="#00ff00")
+        else:
+            self.sound_button.config(fg="#ff0000")
         self.memory["sound_effects_enabled"] = self.sound_effects_enabled
         save_memory(self.memory)
         status = "ON" if self.sound_effects_enabled else "OFF"
@@ -3498,6 +3737,10 @@ class JarvisGUI:
     def toggle_websocket(self):
         """Toggle WebSocket server"""
         self.websocket_enabled = not self.websocket_enabled
+        if self.websocket_enabled:
+            self.websocket_button.config(fg="#00ff00")
+        else:
+            self.websocket_button.config(fg="#ff0000")
         self.memory["websocket_enabled"] = self.websocket_enabled
         save_memory(self.memory)
         
@@ -3508,6 +3751,7 @@ class JarvisGUI:
                 self.websocket_enabled = False
                 self.memory["websocket_enabled"] = False
                 save_memory(self.memory)
+                self.websocket_button.config(fg="#ff0000")
         else:
             self.stop_websocket_server()
             self.log("[WebSocket] Server OFF")
@@ -3517,6 +3761,10 @@ class JarvisGUI:
     def toggle_api(self):
         """Toggle API server"""
         self.api_enabled = not self.api_enabled
+        if self.api_enabled:
+            self.api_button.config(fg="#00ff00")
+        else:
+            self.api_button.config(fg="#ff0000")
         self.memory["api_enabled"] = self.api_enabled
         save_memory(self.memory)
         status = "ON" if self.api_enabled else "OFF"
@@ -3525,6 +3773,10 @@ class JarvisGUI:
     def toggle_database(self):
         """Toggle database backend"""
         self.database_enabled = not self.database_enabled
+        if self.database_enabled:
+            self.database_button.config(fg="#00ff00")
+        else:
+            self.database_button.config(fg="#ff0000")
         self.memory["database_enabled"] = self.database_enabled
         save_memory(self.memory)
         status = "ON" if self.database_enabled else "OFF"
@@ -4009,6 +4261,10 @@ class JarvisGUI:
     def toggle_action_confirmation(self):
         """Toggle action confirmation"""
         self.action_confirmation_enabled = not self.action_confirmation_enabled
+        if self.action_confirmation_enabled:
+            self.confirmation_button.config(fg="#00ff00")
+        else:
+            self.confirmation_button.config(fg="#ff0000")
         self.memory["action_confirmation_enabled"] = self.action_confirmation_enabled
         save_memory(self.memory)
         status = "ON" if self.action_confirmation_enabled else "OFF"
@@ -4017,6 +4273,10 @@ class JarvisGUI:
     def toggle_action_logging(self):
         """Toggle action logging"""
         self.action_logging_enabled = not self.action_logging_enabled
+        if self.action_logging_enabled:
+            self.logging_button.config(fg="#00ff00")
+        else:
+            self.logging_button.config(fg="#ff0000")
         self.memory["action_logging_enabled"] = self.action_logging_enabled
         save_memory(self.memory)
         status = "ON" if self.action_logging_enabled else "OFF"
@@ -4025,6 +4285,10 @@ class JarvisGUI:
     def toggle_sandbox_network(self):
         """Toggle sandbox network isolation"""
         self.sandbox_network_isolation = not self.sandbox_network_isolation
+        if self.sandbox_network_isolation:
+            self.sandbox_net_button.config(fg="#00ff00")
+        else:
+            self.sandbox_net_button.config(fg="#ff0000")
         self.memory["sandbox_network_isolation"] = self.sandbox_network_isolation
         save_memory(self.memory)
         status = "ON" if self.sandbox_network_isolation else "OFF"
@@ -4048,8 +4312,10 @@ class JarvisGUI:
     def toggle_vision_verification(self):
         self.vision_verification = not self.vision_verification
         if self.vision_verification:
+            self.vision_button.config(fg="#00ff00")
             self.log("[Vision] Verification ON - Will use vision model to verify actions")
         else:
+            self.vision_button.config(fg="#ff0000")
             self.log("[Vision] Verification OFF - Will not use vision model")
         self.memory["vision_verification"] = self.vision_verification
         save_memory(self.memory)
@@ -4058,8 +4324,10 @@ class JarvisGUI:
     def toggle_sandbox_mode(self):
         self.sandbox_mode = not self.sandbox_mode
         if self.sandbox_mode:
+            self.sandbox_button.config(fg="#00ff00")
             self.log("[Sandbox] Mode ON - All PC actions will be simulated, not executed")
         else:
+            self.sandbox_button.config(fg="#ff0000")
             self.log("[Sandbox] Mode OFF - PC actions will execute normally")
         self.memory["sandbox_mode"] = self.sandbox_mode
         save_memory(self.memory)
@@ -4070,6 +4338,11 @@ class JarvisGUI:
         current_index = powers.index(self.thinking_power) if self.thinking_power in powers else 0
         next_index = (current_index + 1) % len(powers)
         self.thinking_power = powers[next_index]
+        
+        # Update button label to show current power
+        power_labels = {"normal": "🧠 Normal", "deep": "🧠 Deep", "creative": "🧠 Creative"}
+        self.thinking_power_button.config(text=power_labels[self.thinking_power])
+        
         self.log(f"[Thinking] Power set to {self.thinking_power}")
         self.memory["thinking_power"] = self.thinking_power
         save_memory(self.memory)
@@ -4078,11 +4351,13 @@ class JarvisGUI:
     def toggle_autonomous_mode(self):
         self.autonomous_mode = not self.autonomous_mode
         if self.autonomous_mode:
+            self.auto_button.config(fg="#00ff00")
             self.log("[Autonomous] Mode enabled - Jarvis will think independently")
             self.pause_button.config(state=tk.NORMAL)
             self.autonomous_error_count = 0  # Reset error counter
             threading.Thread(target=self.autonomous_thinking_loop, daemon=True).start()
         else:
+            self.auto_button.config(fg="#ff0000")
             self.log("[Autonomous] Mode disabled")
             self.pause_button.config(state=tk.DISABLED)
         self.update_status_bar()
@@ -4101,6 +4376,10 @@ class JarvisGUI:
     def autonomous_thinking_loop(self):
         # Wait a bit after startup before first autonomous thought
         time.sleep(5)
+        REFLECTION_PROMPT = """Read the recent conversation history and your personality settings. Identify patterns in how the user communicates and what responses worked well vs caused frustration. Write one specific behavioral update in this exact format:
+BEHAVIOR_UPDATE: [specific change]
+Then briefly explain why."""
+        
         while self.autonomous_mode:
             if self.autonomous_paused:
                 time.sleep(1)
@@ -4113,12 +4392,18 @@ class JarvisGUI:
                 continue
                 
             if not self.state["processing"]:
+                self.autonomous_cycle_count += 1
                 self.message_id = self.increment_message_id()
-                self.append_thinking(f"\n--- [Msg #{self.message_id}] Autonomous thinking ---\n")
+                self.append_thinking(f"\n--- [Msg #{self.message_id}] Autonomous thinking (Cycle {self.autonomous_cycle_count}) ---\n")
                 
-                # Get current autonomous prompt
-                base_prompt = self.autonomous_prompts.get(self.autonomous_prompt_category, self.autonomous_prompts.get("proactive", "Think about what you could do to help the user."))
-                autonomous_prompt = base_prompt
+                # Every 5 cycles, use reflection prompt instead of normal autonomous prompt
+                if self.autonomous_cycle_count % 5 == 0:
+                    autonomous_prompt = REFLECTION_PROMPT
+                    self.append_thinking(f"[Reflection] Analyzing behavior patterns...\n")
+                else:
+                    # Get current autonomous prompt
+                    base_prompt = self.autonomous_prompts.get(self.autonomous_prompt_category, self.autonomous_prompts.get("proactive", "Think about what you could do to help the user."))
+                    autonomous_prompt = base_prompt
                 
                 try:
                     thinking_output = []
@@ -4130,10 +4415,25 @@ class JarvisGUI:
                         # Only log/display if still in autonomous mode and not processing user query
                         if self.autonomous_mode and not self.state["processing"] and self.pending_queue.empty():
                             self.append_thinking(f"Thought: {response}\n")
+                            # Check for behavior update in reflection cycles
+                            if self.autonomous_cycle_count % 5 == 0 and "BEHAVIOR_UPDATE:" in response:
+                                # Extract behavior update
+                                import re
+                                match = re.search(r'BEHAVIOR_UPDATE:\s*(.*?)(?:\n|$)', response)
+                                if match:
+                                    behavior_update = match.group(1).strip()
+                                    # Append to personality.txt
+                                    try:
+                                        with open(PERSONALITY_FILE, "a", encoding="utf-8") as f:
+                                            f.write(f"\n{behavior_update}")
+                                        self.log(f"[Memory] Behavior updated: {behavior_update}", debug=True)
+                                        self.append_thinking(f"[Memory] Behavior updated: {behavior_update}\n")
+                                    except Exception as e:
+                                        self.log(f"[Memory] Failed to update personality: {e}", debug=True)
                             # Don't log to main chat to avoid spamming with raw chunks - thinking panel is sufficient
                             self.autonomous_error_count = 0  # Reset error counter on success
                 except Exception as e:
-                    self.log(f"[Autonomous] Error: {e}")
+                    self.log(f"[Autonomous] Error: {e}", debug=True)
                     self.autonomous_error_count += 1
                     
                     # Circuit breaker: pause after 3 consecutive errors
@@ -4195,7 +4495,7 @@ class JarvisGUI:
                     if "'NoneType' object has no attribute" in str(e):
                         mic_error_count += 1
                         if mic_error_count < 3:
-                            self.log(f"[Mic] Stream init failed, retrying...")
+                            self.log(f"[Mic] Stream init failed, retrying...", debug=True)
                         time.sleep(0.5)
                         continue
                     raise
@@ -4204,7 +4504,7 @@ class JarvisGUI:
                     text = self.recognizer.recognize_whisper(audio, model="small", language="english")
                     text = text.strip()
                     if text:
-                        self.log(f"[Voice] You said: {text}")
+                        self.log(f"[Voice] You said: {text}", debug=True)
                         if self.speaking_event.is_set() and should_interrupt(text):
                             self.input_queue.put(("interrupt", text))
                             continue
@@ -4219,16 +4519,16 @@ class JarvisGUI:
                     if mic_error_count < 3:
                         self.log(f"[Whisper error: {e}")
                     else:
-                        self.log("[Whisper] Too many errors, pausing voice input for 10 seconds")
+                        self.log("[Whisper] Too many errors, pausing voice input for 10 seconds", debug=True)
                         time.sleep(10)
                         mic_error_count = 0
                     continue
             except Exception as e:
                 mic_error_count += 1
                 if mic_error_count < 3:
-                    self.log(f"[Mic error: {e}")
+                    self.log(f"[Mic error: {e}", debug=True)
                 else:
-                    self.log("[Mic] Too many errors, pausing voice input for 10 seconds")
+                    self.log("[Mic] Too many errors, pausing voice input for 10 seconds", debug=True)
                     time.sleep(10)
                     mic_error_count = 0
                 time.sleep(1)
@@ -4236,35 +4536,39 @@ class JarvisGUI:
             self.update_status("Ready")
 
     def response_worker(self):
-        self.log("[ResponseWorker] Thread started, waiting for queries...")
+        self.log("[ResponseWorker] Thread started, waiting for queries...", debug=True)
         while True:
             query = self.pending_queue.get()
             if query is None:
-                self.log("[ResponseWorker] Received None, shutting down")
+                self.log("[ResponseWorker] Received None, shutting down", debug=True)
                 self.state["processing"] = False
                 return
 
-            self.log(f"[ResponseWorker] Received query: '{query[:50]}...'")
+            self.log(f"[ResponseWorker] Received query: '{query[:50]}...'", debug=True)
             self.state["processing"] = True
             self.interrupt_event.clear()
             self.update_status("Processing...")
             self.show_thinking_animation(True)
+            self.cancel_button.config(state=tk.NORMAL)
+            self.show_loading_indicator()
 
             try:
-                self.log(f"[ResponseWorker] Step 1: Got query from queue: '{query[:50]}...'")
+                self.log(f"[ResponseWorker] Step 1: Got query from queue: '{query[:50]}...'", debug=True)
                 
                 # Initialize thinking_output early to prevent UnboundLocalError
                 thinking_output = []
                 
                 # STEP 2: Try direct skills first (weather, location, etc.)
-                self.log(f"[ResponseWorker] Step 2: Checking direct skills...")
+                self.log(f"[ResponseWorker] Step 2: Checking direct skills...", debug=True)
                 response = handle_direct_query(query, self.memory)
                 if response:
-                    self.log(f"[ResponseWorker] Step 2: Direct skill matched, response='{response[:50]}...'")
+                    self.log(f"[ResponseWorker] Step 2: Direct skill matched, response='{response[:50]}...'", debug=True)
+                    # Hide loading indicator immediately for direct skill responses
+                    self.hide_loading_indicator()
                 else:
-                    self.log(f"[ResponseWorker] Step 2: No direct skill matched, routing to LLM")
+                    self.log(f"[ResponseWorker] Step 2: No direct skill matched, routing to LLM", debug=True)
             except Exception as e:
-                self.log(f"[ResponseWorker ERROR] Step 2 failed: {e}")
+                self.log(f"[ResponseWorker ERROR] Step 2 failed: {e}", debug=True)
                 import traceback
                 self.log(traceback.format_exc())
                 response = None
@@ -4286,7 +4590,8 @@ class JarvisGUI:
                     if hasattr(self, 'thinking_text') and self.thinking_text and self.thinking_text.winfo_exists():
                         self.thinking_text.after(0, lambda c=chunk: (
                             self.thinking_text.insert("end", c),
-                            self.thinking_text.see("end")
+                            self.thinking_text.see("end"),
+                            self.hide_loading_indicator()  # Hide loading when thinking appears
                         ))
                 
                 # Check which API provider to use
@@ -4301,77 +4606,76 @@ class JarvisGUI:
                 selected_model = select_model_for_query(query)
                 
                 try:
-                    self.log(f"[ResponseWorker] Step 3: Calling {default_provider} API...")
+                    self.log(f"[ResponseWorker] Step 3: Calling {default_provider} API...", debug=True)
                     if default_provider == "ollama":
                         # Use Ollama (local models)
-                        self.log(f"[Model] Using Ollama with {selected_model}")
+                        self.log(f"[Model] Using Ollama with {selected_model}", debug=True)
                         response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model, chunk_callback=update_thinking)
                     else:
                         # Use external API
-                        self.log(f"[Model] Using {default_provider} API")
+                        self.log(f"[Model] Using {default_provider} API", debug=True)
                         response = ask_external_api(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], default_provider)
-                    self.log(f"[ResponseWorker] Step 3: Got response='{response[:50]}...'")
+                    self.log(f"[ResponseWorker] Step 3: Got response='{response[:50]}...'", debug=True)
+                    import re
+                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', response, re.DOTALL)
+                    thinking_content = thinking_match.group(1).strip() if thinking_match else "Direct response — no reasoning generated"
+                    self.append_thinking(f"--- [Msg #{self.message_id}] Reasoning ---\n{thinking_content}\n")
+                    token_count = len(response.split())
+                    self.append_thinking(f"--- Tokens: {token_count} ---\n")
                 except Exception as e:
-                    self.log(f"[ResponseWorker ERROR] Step 3 API call failed: {e}")
+                    self.log(f"[ResponseWorker ERROR] Step 3 API call failed: {e}", debug=True)
                     import traceback
                     self.log(traceback.format_exc())
-                    self.log(f"[Model] Falling back to Ollama...")
+                    self.log(f"[Model] Falling back to Ollama...", debug=True)
                     # Fallback to Ollama
                     try:
                         response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, lambda text: (thinking_output.append(text), self.append_thinking(text, pace=False))[1], False, selected_model, chunk_callback=update_thinking)
-                        self.log(f"[ResponseWorker] Step 3 (fallback): Got response='{response[:50]}...'")
+                        self.log(f"[ResponseWorker] Step 3 (fallback): Got response='{response[:50]}...'", debug=True)
                     except Exception as e2:
-                        self.log(f"[ResponseWorker ERROR] Fallback also failed: {e2}")
+                        self.log(f"[ResponseWorker ERROR] Fallback also failed: {e2}", debug=True)
                         response = f"Error processing your request: {e}"
                 
                 # Extract thinking content from response if present (for saving to history)
                 try:
-                    self.log(f"[ResponseWorker] Step 3b: Extracting thinking content...")
                     thinking_content, response = extract_thinking_content(response)
-                    self.log(f"[ResponseWorker] Step 3b: thinking_content='{thinking_content[:50] if thinking_content else 'None'}...'")
                     if thinking_content:
                         thinking_output = [thinking_content]
-                        self.log(f"[ResponseWorker] Step 3b: Updating thinking panel with reasoning...")
-                        # Clear the thinking panel and display only the extracted reasoning thoughts
-                        if hasattr(self, 'thinking_text') and self.thinking_text and self.thinking_text.winfo_exists():
-                            self.thinking_text.after(0, lambda: (
-                                self.thinking_text.delete(1.0, tk.END),
-                                self.thinking_text.insert(tk.END, "--- Reasoning ---\n\n"),
-                                self.thinking_text.insert(tk.END, thinking_content),
-                                self.thinking_text.insert(tk.END, "\n\n--- Final Response ---\n\n"),
-                                self.thinking_text.see(tk.END)
-                            ))
-                            self.log(f"[ResponseWorker] Step 3b: Thinking panel updated")
-                        # Also update popup window if visible
-                        if self.thinking_panel_visible and hasattr(self, 'thinking_window') and self.thinking_window.winfo_exists():
-                            self.thinking_window_text.after(0, lambda: (
-                                self.thinking_window_text.delete(1.0, tk.END),
-                                self.thinking_window_text.insert(tk.END, "--- Reasoning ---\n\n"),
-                                self.thinking_window_text.insert(tk.END, thinking_content),
-                                self.thinking_window_text.insert(tk.END, "\n\n--- Final Response ---\n\n"),
-                                self.thinking_window_text.see(tk.END),
-                                self.thinking_window_text.update_idletasks()
-                            ))
-                            self.log(f"[ResponseWorker] Step 3b: Popup window updated")
-                    else:
-                        self.log(f"[ResponseWorker] Step 3b: No thinking content found in response")
                 except Exception as e:
-                    self.log(f"[ResponseWorker ERROR] Step 3b (extract thinking): {e}")
-                    import traceback
-                    self.log(traceback.format_exc())
+                    self.log(f"[ResponseWorker ERROR] Step 3b (extract thinking): {e}", debug=True)
 
             self.show_thinking_animation(False)
+            self.hide_loading_indicator()
+            self.cancel_button.config(state=tk.DISABLED)
 
             if response == INTERRUPTED_RESPONSE:
-                self.log(f"[ResponseWorker] Interrupted, skipping response display")
+                self.log(f"[ResponseWorker] Interrupted, skipping response display", debug=True)
                 self.state["processing"] = False
                 self.update_status("Ready")
                 continue
 
             try:
-                self.log(f"[ResponseWorker] Step 4: Adding to history and calling process_response...")
+                self.log(f"[ResponseWorker] Step 4: Adding to history and calling process_response...", debug=True)
                 self.history.append({"role": "user", "content": query})
                 self.history.append({"role": "assistant", "content": response})
+                
+                # Track context tokens
+                query_tokens = estimate_tokens(query)
+                response_tokens = estimate_tokens(response)
+                self.context_tokens += query_tokens + response_tokens
+                self.log(f"[Context] Added {query_tokens + response_tokens} tokens (total: {self.context_tokens}/{MAX_CONTEXT_TOKENS})", debug=True)
+                
+                # Check if compaction threshold reached
+                if self.context_tokens >= MAX_CONTEXT_TOKENS * COMPACT_THRESHOLD and not self.compact_countdown_start:
+                    self.compact_countdown_start = time.time()
+                    self.log(f"[Context] Warning: Context at {int(self.context_tokens / MAX_CONTEXT_TOKENS * 100)}%. Compaction countdown started (5 minutes).")
+                
+                # Check if countdown expired
+                if self.compact_countdown_start and not self.compaction_active:
+                    elapsed = time.time() - self.compact_countdown_start
+                    if elapsed >= COMPACT_COUNTDOWN_SECONDS:
+                        self.log(f"[Context] Countdown expired. Compaction triggered.")
+                        self.compaction_active = True
+                        self.compact_conversation()
                 
                 is_key_moment = False
                 reason = ""
@@ -4390,12 +4694,17 @@ class JarvisGUI:
                     self.log(f"[Personality] Learned: {trait}")
                 
                 # THIS IS THE CRITICAL STEP - process_response calls speak which logs "Jarvis: ..."
-                self.log(f"[ResponseWorker] Step 5: Calling process_response with response='{response[:50]}...'")
+                self.log(f"[ResponseWorker] Step 5: Calling process_response with response='{response[:50]}...'", debug=True)
                 try:
                     process_response(response, self.memory, lambda t: speak(self.engine, t, self.speaking_event, self.interrupt_event, self.log, self.kokoro_voice, self.speech_speed), self.interrupt_event, self.safety_mode, self.file_protection, self.sandbox_mode, self.vision_verification, self.log, self.vision_on_demand_only)
-                    self.log(f"[ResponseWorker] Step 5: process_response completed successfully")
+                    self.log(f"[ResponseWorker] Step 5: process_response completed successfully", debug=True)
+                    # Extract facts from user message using 7b model
+                    facts = extract_facts_from_message(query)
+                    if facts:
+                        self.log(f"[Memory] Extracted {len(facts)} fact(s) from user message", debug=True)
+                        self.memory = load_memory()  # Reload memory to get updated facts
                 except Exception as e:
-                    self.log(f"[ResponseWorker ERROR] Step 5 process_response failed: {e}")
+                    self.log(f"[ResponseWorker ERROR] Step 5 process_response failed: {e}", debug=True)
                     import traceback
                     self.log(traceback.format_exc())
                     # Fallback: just log the response directly
@@ -4403,9 +4712,9 @@ class JarvisGUI:
                 
                 self.state["processing"] = False
                 self.update_status("Ready")
-                self.log(f"[ResponseWorker] Query processing complete")
+                self.log(f"[ResponseWorker] Query processing complete", debug=True)
             except Exception as e:
-                self.log(f"[ResponseWorker ERROR] Step 4/5 outer exception: {e}")
+                self.log(f"[ResponseWorker ERROR] Step 4/5 outer exception: {e}", debug=True)
                 import traceback
                 self.log(traceback.format_exc())
                 self.state["processing"] = False
@@ -4419,7 +4728,7 @@ class JarvisGUI:
             return
 
         # Diagnostic: Log when query is received from input_queue
-        self.log(f"[ProcessQueue] Received query: source={source}, text='{text[:50]}...'")
+        self.log(f"[ProcessQueue] Received query: source={source}, text='{text[:50]}...'", debug=True)
         
         normalized_text = text.lower()
 
@@ -4467,12 +4776,12 @@ class JarvisGUI:
             if source == "text" or contains_wake_word(text) or should_interrupt(text):
                 self.interrupt_event.set()
                 if query:
-                    self.log(f"[ProcessQueue] Interrupting and queuing: '{query[:50]}...'")
+                    self.log(f"[ProcessQueue] Interrupting and queuing: '{query[:50]}...'", debug=True)
                     self.pending_queue.put(query)
             self.root.after(100, self.process_queue)
             return
 
-        self.log(f"[ProcessQueue] Putting query into pending_queue: '{query[:50]}...'")
+        self.log(f"[ProcessQueue] Putting query into pending_queue: '{query[:50]}...'", debug=True)
         self.pending_queue.put(query)
         self.root.after(100, self.process_queue)
 
