@@ -87,7 +87,7 @@ OLLAMA_HOST = "http://127.0.0.1:11434"
 OLLAMA_EXE = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
 OLLAMA_STARTUP_TIMEOUT_SECONDS = 20
 OLLAMA_RETRY_COUNT = 3
-OLLAMA_KEEP_ALIVE = "30m"
+OLLAMA_KEEP_ALIVE = "5m"
 
 # GPU layer allocation per model (optimized for RTX 4070 12GB VRAM)
 # Use num_gpu: 99 to let Ollama decide layer split, not hardcoded values
@@ -1288,6 +1288,21 @@ def check_ollama_running():
         return False
 
 
+def unload_all_models():
+    """Force unload all Ollama models to free RAM"""
+    models = [OLLAMA_MODEL, OLLAMA_SECONDARY_MODEL, OLLAMA_LARGE_MODEL, OLLAMA_CODING_MODEL, VISION_MODEL]
+    for model in models:
+        try:
+            requests.post(f"{OLLAMA_HOST}/api/generate", json={
+                "model": model,
+                "keep_alive": 0,  # 0 = unload immediately
+                "prompt": ""  # Empty prompt to just trigger unload
+            }, timeout=5)
+            print(f"[Ollama] Unloaded {model}")
+        except Exception as e:
+            print(f"[Ollama] Failed to unload {model}: {e}")
+
+
 def wait_for_ollama(timeout_seconds: int = OLLAMA_STARTUP_TIMEOUT_SECONDS) -> bool:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
@@ -2472,6 +2487,9 @@ class JarvisGUI:
             worker_thread.start()
 
             self.root.after(100, self.process_queue)
+            
+            # Register cleanup handler
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         except Exception as e:
             self.log(f"[!] Initialization error: {e}")
@@ -2479,6 +2497,13 @@ class JarvisGUI:
             self.log(traceback.format_exc())
             self.log("[!] Jarvis failed to start. Check the error above.")
             input("\nPress Enter to exit...")
+
+    def on_closing(self):
+        """Cleanup handler when window is closed"""
+        self.log("[Shutdown] Unloading Ollama models to free RAM...")
+        unload_all_models()
+        self.log("[Shutdown] Models unloaded. Goodbye!")
+        self.root.destroy()
 
     def log(self, message):
         self.chat_display.config(state=tk.NORMAL)
