@@ -1,0 +1,114 @@
+[
+  {
+    "model": "qwen2.5:7b",
+    "tests": [
+      {
+        "type": "simple",
+        "query": "What is the capital of France?",
+        "inference_time": 430.94,
+        "response_length": 3,
+        "vram_used_mb": 3276,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 0.01
+      },
+      {
+        "type": "medium",
+        "query": "Explain the concept of machine learning in simple terms.",
+        "inference_time": 12.37,
+        "response_length": 1014,
+        "vram_used_mb": 2,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 82.0
+      },
+      {
+        "type": "complex",
+        "query": "Write a Python function that implements a binary search algorithm with detailed comments.",
+        "inference_time": 33.69,
+        "response_length": 891,
+        "vram_used_mb": 127,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 26.45
+      }
+    ],
+    "description": "Fast model, baseline"
+  },
+  {
+    "model": "qwen2.5:14b",
+    "tests": [
+      {
+        "type": "simple",
+        "query": "What is the capital of France?",
+        "inference_time": 110.12,
+        "response_length": 3,
+        "vram_used_mb": -1186,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 0.03
+      },
+      {
+        "type": "medium",
+        "query": "Explain the concept of machine learning in simple terms.",
+        "inference_time": 133.8,
+        "response_length": 7,
+        "vram_used_mb": 129,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 0.05
+      },
+      {
+        "type": "complex",
+        "query": "Write a Python function that implements a binary search algorithm with detailed comments.",
+        "inference_time": 60.02,
+        "response_length": 775,
+        "vram_used_mb": 0,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 12.91
+      }
+    ],
+    "description": "General purpose, sweet spot"
+  },
+  {
+    "model": "qwen2.5:32b",
+    "tests": [
+      {
+        "type": "simple",
+        "error": "[WinError 10054] An existing connection was forcibly closed by the remote host"
+      },
+      {
+        "type": "medium",
+        "query": "Explain the concept of machine learning in simple terms.",
+        "inference_time": 138.79,
+        "response_length": 7,
+        "vram_used_mb": 4323,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 0.05
+      },
+      {
+        "type": "complex",
+        "query": "Write a Python function that implements a binary search algorithm with detailed comments.",
+        "inference_time": 60.28,
+        "response_length": 86,
+        "vram_used_mb": 0,
+        "vram_total_mb": 8188,
+        "tokens_per_second": 1.43
+      }
+    ],
+    "description": "Large model, max capability"
+  },
+  {
+    "model": "codellama:34b",
+    "tests": [
+      {
+        "type": "simple",
+        "error": "llama runner process has terminated: %!w(<nil>) (status code: 500)"
+      },
+      {
+        "type": "medium",
+        "error": "llama runner process has terminated: %!w(<nil>) (status code: 500)"
+      },
+      {
+        "type": "complex",
+        "error": "llama runner process has terminated: %!w(<nil>) (status code: 500)"
+      }
+    ],
+    "description": "Coding specialized"
+  }
+]
