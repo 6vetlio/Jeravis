@@ -2,20 +2,21 @@
   "facts": [
     "Hello! How can I assist you today? Just remember, I’m here to help with information and tasks that are safe and legal. I"
   ],
-  "conversation_count": 61,
+  "conversation_count": 79,
   "safety_mode": false,
-  "file_protection": false,
-  "speech_speed": null,
-  "sandbox_mode": false,
+  "file_protection": true,
+  "speech_speed": 2.0,
+  "sandbox_mode": true,
   "thinking_power": "creative",
   "vision_verification": false,
   "mini_mode": false,
-  "sound_effects_enabled": false,
+  "sound_effects_enabled": true,
   "current_theme": "cyberpunk",
-  "websocket_enabled": true,
+  "websocket_enabled": false,
   "sandbox_network_isolation": false,
   "action_logging_enabled": true,
   "action_confirmation_enabled": false,
   "database_enabled": true,
-  "api_enabled": false
+  "api_enabled": false,
+  "current_model": "qwen2.5:7b"
 }

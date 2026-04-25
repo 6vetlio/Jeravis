@@ -7,6 +7,7 @@ import time
 import datetime
 import re
 import subprocess
+import difflib
 import sounddevice as sd
 import ollama
 from PIL import ImageGrab
@@ -732,12 +733,30 @@ def contains_wake_word(text: str) -> bool:
 
 
 def is_meaningful_voice_text(text: str) -> bool:
-    stripped = text.strip()
+    stripped = text.strip().lower()
     if not stripped:
         return False
 
     if contains_wake_word(stripped):
         return True
+
+    # Filter out common Whisper hallucinations from silence/background noise
+    hallucinations = {
+        "thank you", "thanks", "you're welcome", "your welcome",
+        "please", "okay", "ok", "yes", "no", "yeah", "yep",
+        "hello", "hi", "hey", "bye", "goodbye",
+        "sorry", "excuse me", "pardon",
+        "right", "left", "up", "down",
+        "one", "two", "three", "four", "five",
+        "six", "seven", "eight", "nine", "ten"
+    }
+    
+    if stripped in hallucinations:
+        return False
+    
+    # Reject very short phrases (less than 4 characters) that aren't wake words
+    if len(stripped) < 4:
+        return False
 
     alnum_count = sum(1 for char in stripped if char.isalnum())
     ascii_letter_count = sum(1 for char in stripped if char.isascii() and char.isalpha())
@@ -2646,10 +2665,14 @@ class JarvisGUI:
 
     def on_send(self, event=None):
         text = self.input_entry.get().strip()
+        self.log(f"[on_send] Called with text: '{text[:50]}...'")
         if text:
             self.input_entry.delete(0, tk.END)
             self.log(f"You (typed): {text}")
             self.input_queue.put(("text", text))
+            self.log(f"[on_send] Put ('text', '{text[:30]}...') into input_queue")
+        else:
+            self.log(f"[on_send] Empty text, ignoring")
         return "break"
 
     def toggle_voice(self):
@@ -4095,20 +4118,19 @@ class JarvisGUI:
                 
                 # Get current autonomous prompt
                 base_prompt = self.autonomous_prompts.get(self.autonomous_prompt_category, self.autonomous_prompts.get("proactive", "Think about what you could do to help the user."))
-                
-                # BUG FIX 5: Add safety guardrails even in unrestricted mode
-                safety_guardrails = "\n\nIMPORTANT: Even in unrestricted mode, you must NEVER suggest or assist with: illegal activities, hacking, malware, violence, self-harm, or dangerous acts. Focus on helpful, constructive thoughts only."
-                autonomous_prompt = base_prompt + safety_guardrails
+                autonomous_prompt = base_prompt
                 
                 try:
                     thinking_output = []
+                    # Use recent conversation history for context (last 5 messages) instead of empty list
+                    recent_history = self.history[-5:] if len(self.history) > 0 else []
                     # Use a shorter timeout for autonomous to avoid blocking user queries
-                    response = ask_ollama(autonomous_prompt, [], self.memory, None, self.safety_mode, self.personality, lambda text: thinking_output.append(text), use_secondary=True)
+                    response = ask_ollama(autonomous_prompt, recent_history, self.memory, None, self.safety_mode, self.personality, lambda text: thinking_output.append(text), use_secondary=True)
                     if response and response != "I can't reach my brain (Ollama)":
                         # Only log/display if still in autonomous mode and not processing user query
                         if self.autonomous_mode and not self.state["processing"] and self.pending_queue.empty():
                             self.append_thinking(f"Thought: {response}\n")
-                            self.log(f"[Autonomous] {response}")
+                            # Don't log to main chat to avoid spamming with raw chunks - thinking panel is sufficient
                             self.autonomous_error_count = 0  # Reset error counter on success
                 except Exception as e:
                     self.log(f"[Autonomous] Error: {e}")
@@ -4214,12 +4236,15 @@ class JarvisGUI:
             self.update_status("Ready")
 
     def response_worker(self):
+        self.log("[ResponseWorker] Thread started, waiting for queries...")
         while True:
             query = self.pending_queue.get()
             if query is None:
+                self.log("[ResponseWorker] Received None, shutting down")
                 self.state["processing"] = False
                 return
 
+            self.log(f"[ResponseWorker] Received query: '{query[:50]}...'")
             self.state["processing"] = True
             self.interrupt_event.clear()
             self.update_status("Processing...")
@@ -4227,6 +4252,9 @@ class JarvisGUI:
 
             try:
                 self.log(f"[ResponseWorker] Step 1: Got query from queue: '{query[:50]}...'")
+                
+                # Initialize thinking_output early to prevent UnboundLocalError
+                thinking_output = []
                 
                 # STEP 2: Try direct skills first (weather, location, etc.)
                 self.log(f"[ResponseWorker] Step 2: Checking direct skills...")
@@ -4240,10 +4268,11 @@ class JarvisGUI:
                 import traceback
                 self.log(traceback.format_exc())
                 response = None
+                thinking_output = []
 
             if response is None:
                 self.message_id = self.increment_message_id()
-                thinking_output = []
+                thinking_output = []  # Reset for LLM processing
                 
                 # Clear thinking box before new query and add header (only if thinking panel is open)
                 if hasattr(self, 'thinking_text') and self.thinking_text and self.thinking_text.winfo_exists():
@@ -4361,6 +4390,9 @@ class JarvisGUI:
             self.root.after(100, self.process_queue)
             return
 
+        # Diagnostic: Log when query is received from input_queue
+        self.log(f"[ProcessQueue] Received query: source={source}, text='{text[:50]}...'")
+        
         normalized_text = text.lower()
 
         # Note: Text input is already logged in on_send(), don't log again here
@@ -4371,8 +4403,15 @@ class JarvisGUI:
             follow_up_query = extract_query_after_wake_word(text)
             if follow_up_query:
                 self.state["active"] = True
+                self.pending_queue.put(follow_up_query)
+                self.root.after(100, self.process_queue)
+                return
 
-        if contains_wake_word(text) and not self.state["active"]:
+        # For text input, always process directly without wake word checks
+        if source == "text":
+            query = text
+            self.state["active"] = True
+        elif contains_wake_word(text) and not self.state["active"]:
             self.state["active"] = True
             query = extract_query_after_wake_word(text)
             if not query:
@@ -4381,12 +4420,9 @@ class JarvisGUI:
                 self.root.after(100, self.process_queue)
                 return
         elif not self.state["active"]:
-            if source == "text":
-                self.state["active"] = True
-                query = text
-            else:
-                self.root.after(100, self.process_queue)
-                return
+            # Voice input without wake word when not active - ignore
+            self.root.after(100, self.process_queue)
+            return
         else:
             query = extract_query_after_wake_word(text) if contains_wake_word(text) else text
 
@@ -4403,10 +4439,12 @@ class JarvisGUI:
             if source == "text" or contains_wake_word(text) or should_interrupt(text):
                 self.interrupt_event.set()
                 if query:
+                    self.log(f"[ProcessQueue] Interrupting and queuing: '{query[:50]}...'")
                     self.pending_queue.put(query)
             self.root.after(100, self.process_queue)
             return
 
+        self.log(f"[ProcessQueue] Putting query into pending_queue: '{query[:50]}...'")
         self.pending_queue.put(query)
         self.root.after(100, self.process_queue)
 

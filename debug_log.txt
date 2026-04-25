@@ -4,18 +4,29 @@
 [TTS] Loading Kokoro voice engine...
 [Mic] Using device index 1
 [Mic] Calibrating...
-[Mic warning] Calibration failed: 'NoneType' object has no attribute 'close'
-[Mic] Using default settings
+[Mic] Calibration complete
 
 [Ready] Say or type 'JARVIS' to activate.
 [Tip]   You can also just type your message directly and press Enter.
 
 Jarvis: Jarvis online. Ready when you are.
-[Mic] Stream init failed, retrying...
-[Mic] Stream init failed, retrying...
-You (typed): how are you
-You (typed): how are you
-[Image] What would you like me to generate?
-You (typed): cat
-You (typed): cat
+[Voice] Disabled
+[Thinking] Power set to normal
+[Thinking] Power set to deep
+[Thinking] Power set to creative
+[Voice] You said: Thank you.
+[Whisper error: name 'difflib' is not defined
+You (typed): hello
+[Thinking] Panel visible
+[Autonomous] Mode enabled - Jarvis will think independently
+[Model] Switched to: qwen2.5:14b
+[Thinking] Panel hidden
+[Thinking] Panel visible
+You (typed): whats the weather
+[Autonomous] Sure thing! Have you considered automating some of your routine tasks? For instance, setting up reminders for important dates or scheduling appointments can save a lot of time. If there's anything specific you struggle with daily, let me know and I'll help set that up for you.
+[Autonomous] It seems like you're looking for ways to enhance your day! How about setting some specific goals or tasks? Perhaps there's a project you've been meaning to start or an area where you could use some organization. I can help create reminders, set up schedules, or even brainstorm ideas if that would be useful. What catches your interest today?
+You (typed): hows the weather
+You (typed): hows the weather
+You (typed): whats the capital of france
+You (typed): who is the 49 the presiden of the us
 [Clipboard] Conversation log copied to clipboard
