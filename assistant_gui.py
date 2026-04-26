@@ -4,27 +4,6 @@ import sys
 # Import config first to get OLLAMA_HOST, then set environment variable before importing ollama
 sys.path.insert(0, os.path.dirname(__file__))
 from config import OLLAMA_HOST
-def load_api_keys():
-    """Load API keys from api_keys.json"""
-    if os.path.exists(API_KEYS_FILE):
-        try:
-            with open(API_KEYS_FILE, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[API Keys] Failed to load: {e}")
-    return {}
-
-
-# Load API keys first to get OLLAMA_HOST setting
-api_keys = load_api_keys()
-saved_ollama_host = api_keys.get("ollama_host", "")
-
-# Use saved host if available, otherwise use config default
-if saved_ollama_host:
-    OLLAMA_HOST = normalize_ollama_host(saved_ollama_host)
-else:
-    OLLAMA_HOST = normalize_ollama_host(OLLAMA_HOST)
-
 os.environ['OLLAMA_HOST'] = OLLAMA_HOST
 
 import json
@@ -199,7 +178,7 @@ LOCAL_OLLAMA_HOST = "http://127.0.0.1:11434"
 def normalize_ollama_host(host: str) -> str:
     host = (host or "").strip()
     if not host:
-        return LOCAL_OLLAMA_HOST
+        return ""  # Return empty to trigger connection dialog
     if not host.startswith(("http://", "https://")):
         host = f"http://{host}"
     return host.rstrip("/")
@@ -216,6 +195,25 @@ set_ollama_host(OLLAMA_HOST)
 
 # External API Configuration
 API_KEYS_FILE = os.path.join(os.path.dirname(__file__), "api_keys.json")
+
+def load_api_keys():
+    """Load API keys from api_keys.json"""
+    if os.path.exists(API_KEYS_FILE):
+        try:
+            with open(API_KEYS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[API Keys] Failed to load: {e}")
+    return {}
+
+
+# Load API keys and override OLLAMA_HOST if saved
+api_keys = load_api_keys()
+saved_ollama_host = api_keys.get("ollama_host", "")
+if saved_ollama_host:
+    set_ollama_host(saved_ollama_host)
+    print(f"[Settings] Loaded Ollama Host from api_keys.json: {OLLAMA_HOST}")
+
 OPENAI_API_KEY = ""
 ANTHROPIC_API_KEY = ""
 KIMI_API_KEY = ""
@@ -2700,17 +2698,9 @@ class JarvisGUI:
             self.log("  JARVIS - Initialising...")
             self.log("=" * 50)
 
-            # Check online Ollama connectivity first
-            self.log("[Ollama] Checking online connectivity...")
-            online_available = check_ollama_connectivity()
-            
-            if online_available:
-                self.log(f"[Ollama] Online connection successful at {OLLAMA_HOST}")
-                threading.Thread(target=warm_ollama_model, daemon=True).start()
-            else:
-                self.log(f"[Ollama] Online connection failed at {OLLAMA_HOST}")
-                self.log("[Ollama] Showing connection choice dialog...")
-                self.root.after(100, self.show_ollama_choice_dialog)
+            # Always show connection choice dialog at startup
+            self.log("[Ollama] Showing connection choice dialog...")
+            self.root.after(100, self.show_ollama_choice_dialog)
 
             self.log("[TTS] Loading Kokoro voice engine...")
             _dir = os.path.dirname(os.path.abspath(__file__))
