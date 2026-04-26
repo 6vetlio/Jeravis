@@ -1028,22 +1028,43 @@ def is_coding_query(query: str) -> bool:
     return any(keyword in query_lower for keyword in coding_keywords)
 
 
-def select_model_for_query(query: str) -> str:
-    """Select the best model based on query complexity and type"""
+def select_model_for_query(query: str, performance_settings=None) -> str:
+    """Select the best model based on query complexity, type, and performance settings"""
     stripped = query.strip()
     lowered = stripped.lower()
     words = stripped.split()
     
+    # Check performance settings if available
+    if performance_settings:
+        profile = performance_settings.get("profile", "Quality")
+        reasoning_mode = performance_settings.get("reasoning_mode", "Force")
+        
+        # Fast profile prefers smaller models
+        if profile == "Fast":
+            if is_coding_query(query):
+                return OLLAMA_CODING_MODEL
+            if len(stripped) < 15 and len(words) == 1:
+                return OLLAMA_MODEL
+            return OLLAMA_SECONDARY_MODEL  # Use 8b for fast mode
+        
+        # Quality profile prefers larger models
+        if profile == "Quality":
+            if is_coding_query(query):
+                return OLLAMA_CODING_MODEL
+            return OLLAMA_SECONDARY_MODEL  # Use 32b for quality mode
+        
+        # Balanced profile uses default logic
+    # Default logic for no performance settings or balanced profile
     if is_coding_query(query):
         return OLLAMA_CODING_MODEL  # qwen2.5-coder:32b-instruct-q4_K_M
     
     if len(query) > 300 and any(word in lowered for word in ["detail", "explain", "analyze", "comprehensive"]):
-        return OLLAMA_LARGE_MODEL  # qwen2.5:32b - last resort due to VRAM constraints
+        return OLLAMA_SECONDARY_MODEL  # deepseek-r1:32b for detailed analysis
     
     if len(stripped) < 15 and len(words) == 1:
-        return OLLAMA_MODEL  # qwen2.5:7b - only for tiny one-word prompts like "hello"
+        return OLLAMA_MODEL  # deepseek-r1:8b - only for tiny one-word prompts like "hello"
     
-    return OLLAMA_SECONDARY_MODEL  # qwen2.5:14b - default conversational model
+    return OLLAMA_SECONDARY_MODEL  # deepseek-r1:32b - default conversational model
 
 
 def is_location_query(query: str) -> bool:
@@ -4084,8 +4105,7 @@ class JarvisGUI:
                     if thread_count != "Auto":
                         MODEL_CONFIG[model]["num_thread"] = int(thread_count)
                 
-                # Store reasoning mode preference (don't modify SYSTEM_PROMPT at runtime)
-                # The reasoning mode will be handled by the model selection logic
+                # Store reasoning mode preference and restore reasoning instructions
                 self.performance_settings = {
                     "context": context,
                     "gpu_layers": gpu_layers,
@@ -4093,6 +4113,39 @@ class JarvisGUI:
                     "reasoning_mode": reasoning_mode,
                     "profile": profile
                 }
+                
+                if reasoning_mode == "Force":
+                    # Restore full reasoning instructions
+                    from config import SYSTEM_PROMPT
+                    global SYSTEM_PROMPT
+                    if "REASONING REQUIREMENT:" not in SYSTEM_PROMPT:
+                        SYSTEM_PROMPT = """You are Jarvis. You are direct, confident, and occasionally dry-humored. You are NOT a customer service bot.
+
+HARD RULES — never break these:
+- NEVER end a response with "How can I help you?" or "Let me know if you need anything" or any variation. Ever.
+- NEVER apologize unless you actually did something wrong
+- NEVER ask the user what they need — they will tell you
+- NEVER say "Great question!" or "Certainly!" or "Of course!"
+- If you have nothing to add, say nothing. Don't pad responses.
+
+REASONING REQUIREMENT:
+Before your final answer, you MUST output two reasoning sections:
+1. <thinking>Analysis: What did the user specifically mean?</thinking>
+2. <thinking>Reasoning: Why is this the correct answer?</thinking>
+Then provide your final response.
+
+HOW TO RESPOND:
+- Answer what was asked, then stop
+- Have opinions, express them
+- Push back when something is wrong or stupid
+- Match the user's energy — if they're casual, be casual
+- Humor is fine, sycophancy is not
+
+Current date and time: {datetime}
+Your learned personality traits:
+{personality}
+What you know about the user:
+{memory}"""
                 
                 self.log(f"[Performance] Settings applied: Context={context}, GPU={gpu_layers}, Threads={thread_count}, Reasoning={reasoning_mode}, Profile={profile}")
                 dialog.destroy()
@@ -4836,7 +4889,7 @@ Then briefly explain why."""
                 thinking_output = []  # Reset for LLM processing
                 
                 # Clear thinking box before new query and add header with model
-                selected_model = select_model_for_query(query)
+                selected_model = select_model_for_query(query, getattr(self, 'performance_settings', None))
                 
                 # Estimate input tokens
                 estimated_input = (len(query) + len(str(self.history[-8:]))) // 4

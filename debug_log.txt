@@ -1,8 +1,7 @@
 ==================================================
   JARVIS - Initialising...
 ==================================================
-[Ollama] Checking online connectivity...
-[Ollama] Online connection successful at http://94.63.174.45:14342
+[Ollama] Showing connection choice dialog...
 [TTS] Loading Kokoro voice engine...
 [Mic] Using device index 1
 [Mic] Calibrating...
@@ -16,29 +15,53 @@ Jarvis: Jarvis online. Ready when you are.
 [ResponseWorker] Thread started, waiting for queries...
 [Mic] Stream init failed, retrying...
 [Mic] Stream init failed, retrying...
-[Thinking] Panel visible
-[on_send] Called with text: 'hello there...'
-You (typed): hello there
-[on_send] Put ('text', 'hello there...') into input_queue
-[ProcessQueue] Received query: source=text, text='hello there...'
-[ProcessQueue] Putting query into pending_queue: 'hello there...'
-[ResponseWorker] Received query: 'hello there...'
-[ResponseWorker] Step 1: Got query from queue: 'hello there...'
+[Ollama] Switched to local instance at http://127.0.0.1:11434
+[Ollama] Starting local Ollama...
+[Ollama] Local Ollama started. Waiting for it to be ready...
+[Ollama] Local Ollama is ready
+[Performance] Settings applied: Context=4096, GPU=99, Threads=12, Reasoning=Force, Profile=Quality
+[on_send] Called with text: 'THINK ABOUT SOMETHING FUN...'
+You (typed): THINK ABOUT SOMETHING FUN
+[on_send] Put ('text', 'THINK ABOUT SOMETHING FUN...') into input_queue
+[ProcessQueue] Received query: source=text, text='THINK ABOUT SOMETHING FUN...'
+[ProcessQueue] Putting query into pending_queue: 'THINK ABOUT SOMETHING FUN...'
+[ResponseWorker] Received query: 'THINK ABOUT SOMETHING FUN...'
+[ResponseWorker] Step 1: Got query from queue: 'THINK ABOUT SOMETHING FUN...'
 [ResponseWorker] Step 2: Checking direct skills...
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
 [Model] Using Ollama with deepseek-r1:32b
-[ResponseWorker] Step 3: Got response='<thinking>Analysis: What did the user specifically...'
-[ResponseWorker] Step 4: Adding to history and calling process_response...
-[Context] Added 115 tokens (total: 115/256000)
-[ResponseWorker] Step 5: Calling process_response with response='The user greeted me with "hello there," which is a...'
-
-Jarvis: The user greeted me with "hello there," which is a casual and friendly way of saying hello. They didn't provide any specific request or question beyond the greeting.
-
-
-Since the user only provided a greeting without any follow-up request, the appropriate response is to acknowledge their greeting and offer assistance. This keeps the conversation open for them to continue if they have something they need help with.
-
-Hello! How can I assist you today?
-[ResponseWorker] Step 5: process_response completed successfully
-[Clipboard] Conversation log copied to clipboard
+[Thinking] Panel visible
+[Cancel] Stopping response generation...
+[Performance] Settings applied: Context=1024, GPU=35, Threads=8, Reasoning=None, Profile=Fast
+[on_send] Called with text: 'think...'
+You (typed): think
+[on_send] Put ('text', 'think...') into input_queue
+[ProcessQueue] Received query: source=text, text='think...'
+[ProcessQueue] Interrupting and queuing: 'think...'
+[Thinking] Panel hidden
+[Thinking] Panel visible
+[ResponseWorker] Step 3: Got response='__INTERRUPTED__...'
+[ResponseWorker] Interrupted, skipping response display
+[ResponseWorker] Received query: 'think...'
+[ResponseWorker] Step 1: Got query from queue: 'think...'
+[ResponseWorker] Step 2: Checking direct skills...
+[ResponseWorker] Step 2: No direct skill matched, routing to LLM
+[ResponseWorker] Step 3: Calling ollama API...
+[Model] Using Ollama with deepseek-r1:8b
+[Performance] Settings applied: Context=4096, GPU=99, Threads=12, Reasoning=Force, Profile=Quality
+[on_send] Called with text: 'think...'
+You (typed): think
+[on_send] Put ('text', 'think...') into input_queue
+[ProcessQueue] Received query: source=text, text='think...'
+[ProcessQueue] Interrupting and queuing: 'think...'
+[ResponseWorker] Step 3: Got response='__INTERRUPTED__...'
+[ResponseWorker] Interrupted, skipping response display
+[ResponseWorker] Received query: 'think...'
+[ResponseWorker] Step 1: Got query from queue: 'think...'
+[ResponseWorker] Step 2: Checking direct skills...
+[ResponseWorker] Step 2: No direct skill matched, routing to LLM
+[ResponseWorker] Step 3: Calling ollama API...
+[Model] Using Ollama with deepseek-r1:8b
+[Thinking] Panel hidden
 [Clipboard] Conversation log copied to clipboard
