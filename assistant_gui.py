@@ -2351,6 +2351,17 @@ class JarvisGUI:
         )
         api_settings_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
+        performance_button = tk.Button(
+            button_row2,
+            text="⚡ Performance",
+            command=self.show_performance_settings,
+            bg="#3c3c3c",
+            fg="white",
+            font=("Arial", 10),
+            relief=tk.FLAT
+        )
+        performance_button.pack(side=tk.RIGHT, padx=3, pady=3)
+
         ide_button = tk.Button(
             button_row2,
             text="💻 IDE",
@@ -3988,6 +3999,117 @@ class JarvisGUI:
         # Button frame
         button_frame = tk.Frame(dialog, bg="#1e1e1e")
         button_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        close_btn = tk.Button(
+            button_frame,
+            text="Close",
+            command=dialog.destroy,
+            bg="#3c3c3c",
+            fg="white",
+            font=("Arial", 10)
+        )
+        close_btn.pack(side=tk.RIGHT, padx=5)
+
+    def show_performance_settings(self):
+        """Show performance settings dialog with dropdowns"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Performance Settings")
+        dialog.geometry("500x600")
+        dialog.configure(bg="#1e1e1e")
+        
+        input_frame = tk.Frame(dialog, bg="#1e1e1e")
+        input_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Context Window Dropdown
+        tk.Label(input_frame, text="Context Window:", bg="#1e1e1e", fg="#d4d4d4", font=("Arial", 10)).pack(anchor="w")
+        context_options = ["512", "1024", "2048", "4096", "8192"]
+        context_var = tk.StringVar(value="4096")
+        context_combo = ttk.Combobox(input_frame, textvariable=context_var, values=context_options, state="readonly", width=20, font=("Arial", 10))
+        context_combo.pack(fill=tk.X, pady=5)
+        
+        # GPU Layers Dropdown
+        tk.Label(input_frame, text="GPU Layers:", bg="#1e1e1e", fg="#d4d4d4", font=("Arial", 10)).pack(anchor="w")
+        gpu_options = ["Low (35)", "Medium (60)", "High (80)", "Max (99)"]
+        gpu_var = tk.StringVar(value="Max (99)")
+        gpu_combo = ttk.Combobox(input_frame, textvariable=gpu_var, values=gpu_options, state="readonly", width=20, font=("Arial", 10))
+        gpu_combo.pack(fill=tk.X, pady=5)
+        
+        # Thread Count Dropdown
+        tk.Label(input_frame, text="Thread Count:", bg="#1e1e1e", fg="#d4d4d4", font=("Arial", 10)).pack(anchor="w")
+        thread_options = ["1", "4", "8", "12", "16", "24", "Auto"]
+        thread_var = tk.StringVar(value="12")
+        thread_combo = ttk.Combobox(input_frame, textvariable=thread_var, values=thread_options, state="readonly", width=20, font=("Arial", 10))
+        thread_combo.pack(fill=tk.X, pady=5)
+        
+        # Reasoning Mode Dropdown
+        tk.Label(input_frame, text="Reasoning Mode:", bg="#1e1e1e", fg="#d4d4d4", font=("Arial", 10)).pack(anchor="w")
+        reasoning_options = ["Force", "Smart", "None"]
+        reasoning_var = tk.StringVar(value="Force")
+        reasoning_combo = ttk.Combobox(input_frame, textvariable=reasoning_var, values=reasoning_options, state="readonly", width=20, font=("Arial", 10))
+        reasoning_combo.pack(fill=tk.X, pady=5)
+        
+        # Performance Profile Dropdown
+        tk.Label(input_frame, text="Performance Profile:", bg="#1e1e1e", fg="#d4d4d4", font=("Arial", 10)).pack(anchor="w")
+        profile_options = ["Fast", "Balanced", "Quality"]
+        profile_var = tk.StringVar(value="Quality")
+        profile_combo = ttk.Combobox(input_frame, textvariable=profile_var, values=profile_options, state="readonly", width=20, font=("Arial", 10))
+        profile_combo.pack(fill=tk.X, pady=5)
+        
+        # Apply button
+        def apply_performance_settings():
+            try:
+                # Parse values
+                context = int(context_var.get())
+                gpu_layers = int(gpu_var.get().split("(")[1].rstrip(")"))
+                thread_count = thread_var.get()
+                reasoning_mode = reasoning_var.get()
+                profile = profile_var.get()
+                
+                # Update MODEL_CONFIG
+                for model in MODEL_CONFIG:
+                    MODEL_CONFIG[model]["num_ctx"] = context
+                    MODEL_CONFIG[model]["num_gpu"] = gpu_layers
+                    if thread_count != "Auto":
+                        MODEL_CONFIG[model]["num_thread"] = int(thread_count)
+                
+                # Apply profile presets
+                if profile == "Fast":
+                    for model in MODEL_CONFIG:
+                        MODEL_CONFIG[model]["num_ctx"] = 1024
+                        MODEL_CONFIG[model]["num_gpu"] = 35
+                elif profile == "Balanced":
+                    for model in MODEL_CONFIG:
+                        MODEL_CONFIG[model]["num_ctx"] = 2048
+                        MODEL_CONFIG[model]["num_gpu"] = 60
+                elif profile == "Quality":
+                    for model in MODEL_CONFIG:
+                        MODEL_CONFIG[model]["num_ctx"] = 4096
+                        MODEL_CONFIG[model]["num_gpu"] = 99
+                
+                # Update reasoning mode in system prompt
+                global SYSTEM_PROMPT
+                if reasoning_mode == "None":
+                    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("REASONING REQUIREMENT:\nBefore your final answer, you MUST output two reasoning sections:\n1. <thinking>Analysis: What did the user specifically mean?</thinking>\n2. <thinking>Reasoning: Why is this the correct answer?</thinking>\nThen provide your final response.\n\n", "")
+                elif reasoning_mode == "Smart":
+                    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("REASONING REQUIREMENT:\nBefore your final answer, you MUST output two reasoning sections:\n1. <thinking>Analysis: What did the user specifically mean?</thinking>\n2. <thinking>Reasoning: Why is this the correct answer?</thinking>\nThen provide your final response.\n\n", "REASONING REQUIREMENT:\nFor complex queries, output reasoning sections in <thinking> tags. For simple questions, answer directly.\n\n")
+                
+                self.log(f"[Performance] Settings applied: Context={context}, GPU={gpu_layers}, Threads={thread_count}, Reasoning={reasoning_mode}, Profile={profile}")
+                dialog.destroy()
+            except Exception as e:
+                self.log(f"[Performance] Failed to apply settings: {e}")
+        
+        button_frame = tk.Frame(dialog, bg="#1e1e1e")
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        apply_btn = tk.Button(
+            button_frame,
+            text="Apply",
+            command=apply_performance_settings,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 10)
+        )
+        apply_btn.pack(side=tk.LEFT, padx=5)
         
         close_btn = tk.Button(
             button_frame,
