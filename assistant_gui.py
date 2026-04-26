@@ -2294,7 +2294,7 @@ class JarvisGUI:
 
         # Button row 2 - Feature buttons
         button_row2 = tk.Frame(input_frame, bg="#252526")
-        button_row2.pack(fill=tk.X, padx=10, pady=(5, 10))
+        button_row2.pack(fill=tk.X, padx=10, pady=(5, 5))
 
         self.vision_button = tk.Button(
             button_row2,
@@ -2329,8 +2329,12 @@ class JarvisGUI:
         )
         prompts_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
+        # Button row 3 - Additional buttons
+        button_row3 = tk.Frame(input_frame, bg="#252526")
+        button_row3.pack(fill=tk.X, padx=10, pady=(0, 10))
+
         search_button = tk.Button(
-            button_row2,
+            button_row3,
             text="🔍 Search",
             command=self.search_conversation_dialog,
             bg="#3c3c3c",
@@ -2341,7 +2345,7 @@ class JarvisGUI:
         search_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         plugins_button = tk.Button(
-            button_row2,
+            button_row3,
             text="🔌 Plugins",
             command=self.show_plugin_manager,
             bg="#3c3c3c",
@@ -2352,7 +2356,7 @@ class JarvisGUI:
         plugins_button.pack(side=tk.RIGHT, padx=3, pady=3)
 
         voice_commands_button = tk.Button(
-            button_row2,
+            button_row3,
             text="🎤 Cmds",
             command=self.edit_voice_commands,
             bg="#3c3c3c",
