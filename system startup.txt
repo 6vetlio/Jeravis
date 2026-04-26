@@ -1,8 +1,8 @@
 #!/bin/bash
-# Jarvis Ollama Startup Script for Linux/Vast.ai
+# Jarvis Ollama Startup Script for 2x RTX 4090 Server (48GB VRAM)
 # Run this after SSH into instance to check GPU and start Ollama
 
-echo "=== Jarvis Ollama Startup ==="
+echo "=== Jarvis Ollama Startup (2x RTX 4090) ==="
 echo ""
 
 # Check NVIDIA GPU and drivers
@@ -58,9 +58,13 @@ echo "✓ Existing processes stopped"
 
 echo ""
 
-# Start Ollama
-echo "Step 4: Starting Ollama..."
-export OLLAMA_HOST=0.0.0.0:8081
+# Start Ollama with optimized settings for 2x RTX 4090
+echo "Step 4: Starting Ollama with optimized settings..."
+export OLLAMA_HOST=0.0.0.0:14342
+export OLLAMA_NUM_GPU=2
+export OLLAMA_GPU_LAYERS=99
+export CUDA_VISIBLE_DEVICES=0,1
+export OLLAMA_NUM_THREAD=64
 if [ "$GPU_AVAILABLE" = false ]; then
     echo "  Warning: Running without GPU acceleration"
 fi
@@ -70,13 +74,13 @@ sleep 5
 # Check if Ollama is running
 echo ""
 echo "Step 5: Verifying Ollama is running..."
-if curl -s http://localhost:8081/api/tags > /dev/null 2>&1; then
-    echo "✓ Ollama is running on http://0.0.0.0:8081"
+if curl -s http://localhost:14342/api/tags > /dev/null 2>&1; then
+    echo "✓ Ollama is running on http://0.0.0.0:14342"
     
     # Show available models
     echo ""
     echo "Available models:"
-    curl -s http://localhost:8081/api/tags | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | while read model; do
+    curl -s http://localhost:14342/api/tags | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | while read model; do
         echo "  - $model"
     done
     echo ""
@@ -92,15 +96,16 @@ echo "=== Startup Complete ==="
 echo ""
 echo "Status:"
 if [ "$GPU_AVAILABLE" = true ]; then
-    echo "  GPU:    Enabled and working"
+    echo "  GPU:    2x RTX 4090 (48GB VRAM) - Enabled and working"
 else
     echo "  GPU:    Not available (CPU mode)"
 fi
-echo "  Ollama: Running on http://0.0.0.0:8081"
+echo "  Ollama: Running on http://0.0.0.0:14342"
+echo "  Server: 85.218.235.6:14342"
 echo ""
 echo "Commands:"
 echo "  View logs:    cat /tmp/ollama.log"
 echo "  Stop:         pkill ollama"
 echo "  Restart:      Run this script again"
-echo "  Test:         curl http://localhost:8081/api/tags"
+echo "  Test:         curl http://localhost:14342/api/tags"
 echo ""
