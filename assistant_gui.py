@@ -1937,8 +1937,9 @@ class JarvisGUI:
         try:
             self.root = root
             self.root.title("Jarvis - AI Assistant")
-            self.root.geometry("800x600")
+            self.root.geometry("1200x800")
             self.root.configure(bg="#1e1e1e")
+            self.root.resizable(True, True)  # Make window resizable
 
             self.memory = load_memory()
             self.history = []
