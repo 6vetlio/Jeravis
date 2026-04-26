@@ -1,0 +1,40 @@
+{
+  "memory": {
+    "facts": [
+      "Hello! How can I assist you today? Just remember, I\u2019m here to help with information and tasks that are safe and legal. I"
+    ],
+    "conversation_count": 38,
+    "safety_mode": false,
+    "file_protection": false,
+    "speech_speed": null,
+    "sandbox_mode": true,
+    "thinking_power": "deep",
+    "vision_verification": true,
+    "mini_mode": true
+  },
+  "personality": "",
+  "autonomous_prompts": {
+    "proactive": "Think about what you could do to help the user. Suggest proactive actions, improvements, or interesting observations. Keep it brief.",
+    "creative": "Think creatively about how you could assist. Suggest innovative ideas, creative projects, or unique solutions. Keep it brief.",
+    "analytical": "Think analytically about the user's situation. Suggest data-driven insights, optimizations, or systematic improvements. Keep it brief."
+  },
+  "voice_commands": {
+    "open browser": {
+      "action": "text",
+      "value": "open browser"
+    },
+    "open file explorer": {
+      "action": "text",
+      "value": "open file explorer"
+    },
+    "check weather": {
+      "action": "text",
+      "value": "what's the weather"
+    },
+    "system info": {
+      "action": "text",
+      "value": "show system information"
+    }
+  },
+  "export_timestamp": "20260424_235957"
+}

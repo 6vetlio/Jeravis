@@ -1,0 +1,7 @@
+{
+  "openai": "",
+  "anthropic": "",
+  "kimi": "",
+  "swe": "",
+  "default_provider": "ollama"
+}

@@ -1,0 +1,111 @@
+#!/bin/bash
+# Complete Jarvis Ollama Setup Script for Vast.ai/Linux
+# Copy and paste this entire script to set up Ollama with all models
+# Usage: After SSH into new instance, paste this entire script
+
+set -e  # Exit on any error
+
+echo "=== Jarvis Ollama Automated Setup ==="
+echo "This will take 20-40 minutes depending on download speeds"
+echo ""
+
+echo "Step 1: Updating system packages..."
+sudo apt update && sudo apt upgrade -y
+
+echo "Step 2: Installing official Ollama..."
+curl -fsSL https://ollama.com/install.sh | sh
+
+echo "Step 3: Waiting for Ollama installation to complete..."
+sleep 5
+
+echo "Step 4: Starting Ollama on all interfaces (0.0.0.0) on port 8081..."
+# Stop and disable systemd service (it listens on localhost only)
+sudo systemctl stop ollama 2>/dev/null || true
+sudo systemctl disable ollama 2>/dev/null || true
+sleep 2
+
+# Kill any existing Ollama processes
+pkill -9 ollama 2>/dev/null || true
+sleep 2
+
+# Start Ollama listening on all interfaces using environment variable
+export OLLAMA_HOST=0.0.0.0:8081
+nohup ollama serve > /tmp/ollama.log 2>&1 &
+echo "Waiting for Ollama to start..."
+sleep 5
+
+echo "Step 5: Opening firewall port 8081..."
+sudo ufw allow 8081/tcp 2>/dev/null || true
+sudo ufw reload 2>/dev/null || true
+
+echo "Step 6: Pulling models (this will take 20-40 minutes, ~40GB total)..."
+echo "Pulling qwen2.5:7b (~4.7GB)..."
+ollama pull qwen2.5:7b
+
+echo "Pulling qwen2.5:14b (~9.0GB)..."
+ollama pull qwen2.5:14b
+
+echo "Pulling qwen2.5:32b (~19GB)..."
+ollama pull qwen2.5:32b
+
+echo "Pulling qwen2.5-coder:32b-instruct-q4_K_M (~19GB)..."
+ollama pull qwen2.5-coder:32b-instruct-q4_K_M
+
+echo "Pulling llava:latest (~4.7GB)..."
+ollama pull llava:latest
+
+echo "Step 7: Verifying Ollama is running and accessible..."
+sleep 3
+if curl -s http://localhost:8081/api/tags > /dev/null; then
+    echo "✓ Ollama is running on localhost:8081"
+else
+    echo "✗ Ollama failed to start properly"
+    echo "Check logs: cat /tmp/ollama.log"
+    exit 1
+fi
+
+echo "Step 8: Checking if listening on all interfaces..."
+if netstat -tlnp 2>/dev/null | grep -q ":8081"; then
+    echo "✓ Ollama is listening on port 8081"
+    netstat -tlnp 2>/dev/null | grep ":8081"
+else
+    echo "⚠ Could not verify listening status (netstat may not be available)"
+fi
+
+echo ""
+echo "=== Setup Complete ==="
+echo "Ollama is now running on http://0.0.0.0:8081"
+echo "All 5 models have been pulled successfully:"
+echo "  - qwen2.5:7b"
+echo "  - qwen2.5:14b"
+echo "  - qwen2.5:32b"
+echo "  - qwen2.5-coder:32b-instruct-q4_K_M"
+echo "  - llava:latest"
+echo ""
+echo "Get your instance IP and port from Vast.ai dashboard (e.g., 8081 or 14342)"
+echo ""
+echo "=== Connection Options ==="
+echo ""
+echo "1. DIRECT CONNECTION (fastest, less secure):"
+echo "   Jarvis API Settings → Ollama Host URL:"
+echo "   http://<YOUR-INSTANCE-IP>:<PORT>"
+echo ""
+echo "2. SSH TUNNEL (more secure, recommended):"
+echo "   On Windows PowerShell:"
+echo "   ssh -p <SSH-PORT> root@<INSTANCE-IP> -L 8081:localhost:8081 -N"
+echo "   "
+echo "   Then in Jarvis API Settings:"
+echo "   http://127.0.0.1:8081"
+echo ""
+echo "3. VAST.AI PORT FORWARDING (if using exposed port):"
+echo "   Vast.ai automatically forwards ports. Use the exposed port shown in dashboard."
+echo ""
+echo "To test connection from Windows:"
+echo "   curl http://<YOUR-INSTANCE-IP>:<PORT>/api/tags"
+echo ""
+echo "You can now close this SSH session. Ollama will keep running in background."
+echo ""
+echo "Commands:"
+echo "  Stop Ollama:  pkill ollama"
+echo "  View logs:    cat /tmp/ollama.log"
+echo "  Restart:      export OLLAMA_HOST=0.0.0.0:8081 && nohup ollama serve > /tmp/ollama.log 2>&1 &"

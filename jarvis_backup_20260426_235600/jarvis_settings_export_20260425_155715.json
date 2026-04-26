@@ -1,0 +1,49 @@
+{
+  "memory": {
+    "facts": [
+      "Hello! How can I assist you today? Just remember, I\u2019m here to help with information and tasks that are safe and legal. I"
+    ],
+    "conversation_count": 69,
+    "safety_mode": false,
+    "file_protection": true,
+    "speech_speed": 2.0,
+    "sandbox_mode": true,
+    "thinking_power": "creative",
+    "vision_verification": false,
+    "mini_mode": false,
+    "sound_effects_enabled": true,
+    "current_theme": "cyberpunk",
+    "websocket_enabled": false,
+    "sandbox_network_isolation": false,
+    "action_logging_enabled": true,
+    "action_confirmation_enabled": false,
+    "database_enabled": true,
+    "api_enabled": false,
+    "current_model": "qwen2.5:14b"
+  },
+  "personality": "",
+  "autonomous_prompts": {
+    "proactive": "Think about what you could do to help the user. Suggest proactive actions, improvements, or interesting observations. Keep it brief.",
+    "creative": "Think creatively about how you could assist. Suggest innovative ideas, creative projects, or unique solutions. Keep it brief.",
+    "analytical": "Think analytically about the user's situation. Suggest data-driven insights, optimizations, or systematic improvements. Keep it brief."
+  },
+  "voice_commands": {
+    "open browser": {
+      "action": "text",
+      "value": "open browser"
+    },
+    "open file explorer": {
+      "action": "text",
+      "value": "open file explorer"
+    },
+    "check weather": {
+      "action": "text",
+      "value": "what's the weather"
+    },
+    "system info": {
+      "action": "text",
+      "value": "show system information"
+    }
+  },
+  "export_timestamp": "20260425_155715"
+}

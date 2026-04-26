@@ -1,0 +1,18 @@
+{
+  "open browser": {
+    "action": "text",
+    "value": "open browser"
+  },
+  "open file explorer": {
+    "action": "text",
+    "value": "open file explorer"
+  },
+  "check weather": {
+    "action": "text",
+    "value": "what's the weather"
+  },
+  "system info": {
+    "action": "text",
+    "value": "show system information"
+  }
+}

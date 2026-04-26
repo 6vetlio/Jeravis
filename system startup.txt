@@ -1,0 +1,104 @@
+#!/bin/bash
+# Jarvis Ollama Startup Script for Linux/Vast.ai
+# Run this after SSH into instance to check GPU and start Ollama
+
+echo "=== Jarvis Ollama Startup ==="
+echo ""
+
+# Check NVIDIA GPU and drivers
+echo "Step 1: Checking NVIDIA GPU and drivers..."
+if command -v nvidia-smi &> /dev/null; then
+    echo "✓ nvidia-smi found"
+    if nvidia-smi > /dev/null 2>&1; then
+        echo "✓ NVIDIA drivers working"
+        nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+        GPU_AVAILABLE=true
+    else
+        echo "✗ NVIDIA driver mismatch detected"
+        echo "  Attempting quick fix..."
+        sudo modprobe -r nvidia 2>/dev/null
+        sudo modprobe nvidia 2>/dev/null
+        sleep 2
+        if nvidia-smi > /dev/null 2>&1; then
+            echo "✓ NVIDIA drivers fixed and working"
+            nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+            GPU_AVAILABLE=true
+        else
+            echo "✗ Driver fix failed. Ollama will use CPU (slower)"
+            echo "  To fix properly: sudo apt install -y nvidia-driver-550 && sudo reboot"
+            GPU_AVAILABLE=false
+        fi
+    fi
+else
+    echo "✗ nvidia-smi not found. No NVIDIA GPU detected."
+    echo "  Ollama will run on CPU (much slower)"
+    GPU_AVAILABLE=false
+fi
+
+echo ""
+
+# Check if Ollama is installed
+echo "Step 2: Checking Ollama installation..."
+if ! command -v ollama &> /dev/null; then
+    echo "✗ Ollama not found. Installing..."
+    curl -fsSL https://ollama.com/install.sh | sh
+    echo "✓ Ollama installed"
+else
+    echo "✓ Ollama found"
+fi
+
+echo ""
+
+# Stop any existing Ollama processes
+echo "Step 3: Stopping any existing Ollama processes..."
+sudo systemctl stop ollama 2>/dev/null || true
+pkill -9 ollama 2>/dev/null || true
+sleep 2
+echo "✓ Existing processes stopped"
+
+echo ""
+
+# Start Ollama
+echo "Step 4: Starting Ollama..."
+export OLLAMA_HOST=0.0.0.0:8081
+if [ "$GPU_AVAILABLE" = false ]; then
+    echo "  Warning: Running without GPU acceleration"
+fi
+nohup ollama serve > /tmp/ollama.log 2>&1 &
+sleep 5
+
+# Check if Ollama is running
+echo ""
+echo "Step 5: Verifying Ollama is running..."
+if curl -s http://localhost:8081/api/tags > /dev/null 2>&1; then
+    echo "✓ Ollama is running on http://0.0.0.0:8081"
+    
+    # Show available models
+    echo ""
+    echo "Available models:"
+    curl -s http://localhost:8081/api/tags | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | while read model; do
+        echo "  - $model"
+    done
+else
+    echo "✗ Ollama failed to start"
+    echo "Check logs: cat /tmp/ollama.log"
+    exit 1
+fi
+
+echo ""
+echo "=== Startup Complete ==="
+echo ""
+echo "Status:"
+if [ "$GPU_AVAILABLE" = true ]; then
+    echo "  GPU:    Enabled and working"
+else
+    echo "  GPU:    Not available (CPU mode)"
+fi
+echo "  Ollama: Running on http://0.0.0.0:8081"
+echo ""
+echo "Commands:"
+echo "  View logs:    cat /tmp/ollama.log"
+echo "  Stop:         pkill ollama"
+echo "  Restart:      Run this script again"
+echo "  Test:         curl http://localhost:8081/api/tags"
+echo ""

@@ -1,18 +1,18 @@
 # Jarvis - Advanced Local AI Assistant
 
-A powerful local AI voice assistant with multi-model routing, vision analysis, autonomous thinking, and PC control. Jarvis runs entirely on your local machine with no cloud dependencies for core functionality.
+A powerful AI voice assistant with multi-model routing, vision analysis, autonomous thinking, and PC control. Jarvis supports both local and remote Ollama instances for flexible deployment.
 
 ## Features
 
 ### AI & Models
 - **Multi-Model Routing**: Automatically selects best model based on query complexity
-  - `qwen2.5:7b` - Fast queries, weather, simple greetings
-  - `qwen2.5:14b` - Medium complexity, general purpose
-  - `qwen2.5:32b` - Complex/long queries, detailed analysis (last resort)
-  - `qwen2.5-coder:32b-instruct-q4_K_M` - Coding/programming queries
+  - `qwen2.5:7b` - Tiny one-word prompts under 15 characters
+  - `qwen2.5:14b` - Default conversational model
+  - `qwen2.5:32b` - Long detailed analysis prompts over 300 characters
+  - `qwen2.5-coder:32b-instruct-q4_K_M` - Coding/debug/error/bug/python/script/function/implement queries
   - `llava:latest` - Vision/image analysis
-- **Smart Model Selection**: Routes coding queries to coding model, complex to 32b, fast to 7b
-- **GPU Optimization**: Configurable GPU layer allocation per model (optimized for RTX 4070 12GB VRAM)
+- **Smart Model Selection**: Routes normal conversation to 14B by default, with narrow rules for 7B, coder 32B, and large 32B
+- **GPU Optimization**: Configurable GPU layer allocation per model
 - **Model Unloading**: Automatically unloads models on app close to free RAM
 - **External API Support**: OpenAI, Anthropic, Kimi, SWE API integration
 
@@ -21,7 +21,7 @@ A powerful local AI voice assistant with multi-model routing, vision analysis, a
 - **Voice Output**: Kokoro TTS with multiple voices and speed control
 - **Interruptible**: Can be interrupted mid-speech with voice commands
 - **Fuzzy Wake Word**: Supports aliases like "Dioris" for wake-word detection
-- **Voice Speed Control**: Adjustable playback speed (1.0x, 1.5x, 2.0x, 3.0x, skip mode)
+- **Voice Speed Control**: Adjustable playback speed (1.0x, 1.5x, 2.0x, skip mode)
 - **Microphone Selection**: Auto-selects from available microphones
 
 ### Vision & Screenshots
@@ -35,7 +35,7 @@ A powerful local AI voice assistant with multi-model routing, vision analysis, a
 - **Custom Prompts**: Configurable autonomous thinking prompts
 - **Circuit Breaker**: Auto-pauses after 3 consecutive errors to prevent loops
 - **Manual Control**: Pause/resume autonomous mode via GUI
-- **Thinking Display**: Real-time thinking process visualization
+- **Thinking Display**: Live output streams into the embedded thinking panel and popup window
 
 ### Safety & Security
 - **Sandbox Mode**: Simulates PC actions without execution
@@ -49,7 +49,8 @@ A powerful local AI voice assistant with multi-model routing, vision analysis, a
 - **PowerShell Execution**: Execute commands on local machine
 - **Network Isolation**: Sandbox network access for security
 - **Action Queue**: Multi-task processing with queue management
-- **IDE Integration**: Built-in code editor with save/open functionality
+- **Local or Remote Ollama**: Use local GPU or connect to remote Ollama instances (Vast.ai, cloud servers)
+- **Smart Connection**: Auto-detects online Ollama and prompts user for local/remote choice on failure
 - **File Operations**: Create, edit, save files via PC actions
 
 ### Memory & Knowledge
@@ -65,7 +66,7 @@ A powerful local AI voice assistant with multi-model routing, vision analysis, a
 - **Mini Mode**: Compact UI for reduced screen space
 - **Sound Effects**: Toggle UI sound effects
 - **Status Bar**: Real-time RAM/VRAM monitoring, safety status, autonomous mode status
-- **Thinking Panel**: Separate window for thinking process visualization
+- **Thinking Panel**: Embedded and popup thinking views with live streaming output
 - **Quick Actions**: Predefined shortcuts for common tasks
 
 ### Advanced Features
@@ -98,6 +99,7 @@ A powerful local AI voice assistant with multi-model routing, vision analysis, a
 
 ## Installation
 
+### Local Installation (Windows)
 1. Install Ollama: https://ollama.com
 2. Pull required models:
    ```powershell
@@ -115,6 +117,47 @@ A powerful local AI voice assistant with multi-model routing, vision analysis, a
    - Download `kokoro-v1.0.onnx` (~325MB) and `voices-v1.0.bin` (~28MB)
    - Place both files in the same directory as `assistant_gui.py`
    - Model source: https://github.com/remsky/Kokoro-FastAPI
+
+### Remote Server Setup (Linux/Vast.ai) - RECOMMENDED for 32B models
+
+For running Ollama on a remote GPU server (e.g., Vast.ai, Akamai) with better performance:
+
+1. SSH into your remote instance
+2. Use the provided `system initialization.txt` script:
+   ```bash
+   bash "system initialization.txt"
+   ```
+   This will:
+   - Update system packages
+   - Install Ollama
+   - Start Ollama on port 8081 (configurable)
+   - Pull all required models
+3. **Configure via GUI**: Open Jarvis → Settings → API Settings → enter your Ollama Host URL
+   - Direct connection: `http://your-remote-ip:8081`
+   - Bare host values like `your-remote-ip:8081` are normalized to `http://your-remote-ip:8081`
+   - Trailing slashes are removed automatically
+   - Empty host values fall back to `http://127.0.0.1:11434`
+   - Or use SSH tunnel for security (see below)
+
+4. **Jarvis startup behavior**:
+   - Jarvis checks the configured Ollama host at startup
+   - If the configured host is accessible, uses it automatically
+   - If the configured host fails, shows GUI dialog with 3 options:
+     - Start Local Ollama
+     - Reconfigure Online URL
+     - Continue Without Ollama (retry on first request)
+   - Starting local Ollama switches the host to `http://127.0.0.1:11434`
+
+**SSH Tunnel (more secure):**
+```bash
+ssh -p <ssh-port> root@remote-ip -L 8081:localhost:8081
+```
+Then use `OLLAMA_HOST = "http://127.0.0.1:8081"`
+
+**Coding model pull command:**
+```bash
+ollama pull qwen2.5-coder:32b-instruct-q4_K_M
+```
 
 ## Usage
 
@@ -139,28 +182,65 @@ Activate Jarvis by saying **"Jarvis"** or using fuzzy aliases:
 
 You can also type messages directly without the wake word.
 
+## Jarvis Runtime Notes
+
+### Ollama Host
+Jarvis supports both local and remote Ollama. Configure the host in **Settings → API Settings → Ollama Host URL**.
+
+Host values are normalized automatically:
+- Missing `http://` or `https://` is treated as `http://`
+- Trailing slash is removed
+- Empty host falls back to `http://127.0.0.1:11434`
+
+The normalized host is applied to the running process through `OLLAMA_HOST`.
+
+### Startup Behavior
+At launch, Jarvis tests the configured Ollama host.
+
+- If the host responds, Jarvis uses it and warms the model in the background
+- If the host fails, Jarvis offers to start local Ollama, reconfigure the online URL, or continue without Ollama
+- Choosing local switches the runtime host to `http://127.0.0.1:11434`
+
+### Model Routing
+Jarvis routes prompts by intent. Coding keywords are checked first.
+
+- Coding/debug/error/bug/python/script/function/implement queries → `qwen2.5-coder:32b-instruct-q4_K_M`
+- Long detailed analysis over 300 characters containing detail/explain/analyze/comprehensive → `qwen2.5:32b`
+- Tiny non-coding one-word prompts under 15 characters → `qwen2.5:7b`
+- Normal conversation → `qwen2.5:14b`
+
+Jarvis receives the actual active model name in the system prompt:
+`You are currently running on: <model>`
+
+Fallback requests rebuild the prompt with the fallback model name, so model self-reporting stays accurate.
+
+### Thinking Stream
+The thinking panel streams live output during generation in both the embedded panel and popup window. If generation is cancelled, partial output remains visible and is marked interrupted.
+
+### Persona
+Jarvis uses a direct hard-rules system prompt. It should not end with customer-service closers, fake apologies, or filler. It answers what was asked, then stops.
+
 ## Model Configuration
 
 ### GPU Layer Allocation
-Models are configured with specific GPU layer allocations optimized for RTX 4070 12GB VRAM:
+Models are configured with specific GPU layer allocations in `config.py`:
 
 ```python
 MODEL_CONFIG = {
-    "qwen2.5:7b": {"num_gpu": 99, "num_thread": 8},
-    "qwen2.5:14b": {"num_gpu": 99, "num_thread": 8},
-    "qwen2.5:32b": {"num_gpu": 33, "num_thread": 8, "num_ctx": 2048},  # Reduced to prevent OOM
-    "qwen2.5-coder:32b-instruct-q4_K_M": {"num_gpu": 33, "num_thread": 8, "num_ctx": 2048},
-    "llava:latest": {"num_gpu": 99, "num_thread": 8},
+    "qwen2.5:7b": {"num_gpu": 99, "num_thread": 12},
+    "qwen2.5:14b": {"num_gpu": 99, "num_thread": 12},
+    "qwen2.5:32b": {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
+    "qwen2.5-coder:32b-instruct-q4_K_M": {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
+    "llava:latest": {"num_gpu": 99, "num_thread": 12},
 }
 ```
 
 ### Smart Routing Logic
 Queries are automatically routed to the appropriate model:
-- **Simple queries** (< 20 chars, weather, greetings) → qwen2.5:7b
-- **Coding queries** → qwen2.5-coder:32b-instruct-q4_K_M
-- **Complex queries** (> 200 chars, "comprehensive", "in-depth") → qwen2.5:32b
-- **Medium complexity** (> 100 chars, "explain", "analyze") → qwen2.5:14b
-- **Default** → qwen2.5:14b
+- **Coding queries** containing `code`, `script`, `function`, `python`, `debug`, `implement`, `error`, or `bug` → `qwen2.5-coder:32b-instruct-q4_K_M`
+- **Long detailed analysis** over 300 characters containing `detail`, `explain`, `analyze`, or `comprehensive` → `qwen2.5:32b`
+- **Tiny non-coding one-word prompts** under 15 characters → `qwen2.5:7b`
+- **Default conversation** → `qwen2.5:14b`
 
 ## Direct Skills
 
@@ -213,8 +293,8 @@ OLLAMA_LARGE_MODEL = "qwen2.5:32b"
 OLLAMA_CODING_MODEL = "qwen2.5-coder:32b-instruct-q4_K_M"
 VISION_MODEL = "llava:latest"
 
-# Ollama Settings
-OLLAMA_HOST = "http://127.0.0.1:11434"
+# Ollama Settings (can also be set via GUI: Settings → API Settings)
+OLLAMA_HOST = "http://127.0.0.1:11434"  # Or remote: http://your-server:8081
 OLLAMA_KEEP_ALIVE = "5m"  # Keep model warm for 5 minutes
 OLLAMA_RETRY_COUNT = 3
 
@@ -229,16 +309,27 @@ WAKE_WORD_SIMILARITY_THRESHOLD = 0.72
 
 ## Troubleshooting
 
-### "Can't find my brain" Error
+### "Can't find my brain" / Connection Errors
+
+**For Local Ollama:**
 - Ensure Ollama is running: check if `ollama.exe` is accessible
 - Verify models are installed: `ollama pull qwen2.5:7b`
 - Check Ollama is accessible at `http://127.0.0.1:11434`
 
+**For Remote Ollama (Vast.ai, cloud servers):**
+- Check that remote Ollama is running: `curl http://<IP>:<PORT>/api/tags`
+- Verify the port is correct (Vast.ai often uses different exposed ports like 14342)
+- Check firewall rules on remote server: `sudo ufw allow <PORT>/tcp`
+- Ensure Ollama is listening on 0.0.0.0 (all interfaces), not just localhost
+- Try SSH tunnel if direct connection fails: `ssh -p <SSH-PORT> root@<IP> -L 8081:localhost:8081 -N`
+- **GUI Configuration**: Settings → API Settings → enter Ollama Host URL
+- If startup check fails, Jarvis will show connection choice dialog with 3 options
+
 ### Model OOM Crashes (Status 500)
 - Large models (32B) may exceed VRAM on 8GB cards
 - Jarvis automatically falls back to qwen2.5:7b on crash
-- GPU layer allocation is reduced for 32B models to prevent OOM
-- Use 14B model instead for medium complexity queries
+- Adjust `MODEL_CONFIG` if your GPU cannot keep the 32B models resident
+- Use the 14B model for normal conversation when 32B is unnecessary
 
 ### Voice Cutoffs
 - If Jarvis cuts you off too early, adjust thresholds:
@@ -248,6 +339,8 @@ WAKE_WORD_SIMILARITY_THRESHOLD = 0.72
 
 ### TTS Crashes
 - Long responses are automatically truncated to `MAX_TTS_CHARS` (280)
+- TTS speed is clamped to Kokoro's valid range (`0.5` to `2.0`)
+- The GUI speed cycle uses `1.0x`, `1.5x`, `2.0x`, and skip mode
 - If TTS still crashes, reduce `MAX_TTS_CHARS` further
 
 ### Wake Word Not Detected
@@ -274,7 +367,29 @@ Tested on:
 
 ## Development History
 
-### Phase 1: Critical Bug Fixes (Latest)
+### Phase 3: Jarvis Polish Pass (Latest)
+- Normal conversation now routes to `qwen2.5:14b`; `qwen2.5:7b` is only for tiny one-word prompts
+- Coding routing is restricted to explicit coding/debug keywords
+- The active model name is injected into the system prompt so Jarvis can report it accurately
+- Thinking output streams live into the embedded panel and popup
+- Cancelling generation keeps partial output visible and marks it interrupted
+- Duplicate normal Jarvis messages were removed from the display path
+- Kokoro TTS speed is clamped to the valid `0.5` to `2.0` range
+- Ollama host values are normalized and applied to `OLLAMA_HOST`
+- Jarvis uses the direct hard-rules persona prompt
+
+### Phase 2: Remote Ollama Support
+- Added remote Ollama instance support (Vast.ai, cloud servers)
+- Rewrote all Ollama API calls to use direct HTTP requests via `requests` library
+- Added `OLLAMA_HOST` environment variable configuration at startup
+- Added startup connectivity check with GUI choice dialog (local/remote/retry)
+- Removed automatic local Ollama startup (now user-choice via GUI)
+- Added Ollama Host URL field to API Settings dialog
+- Added connection test button using direct HTTP (not ollama library)
+- Fixed automatic conversation history saving to `conversation_history.txt`
+- Updated system initialization script with port 8081 and connection instructions
+
+### Phase 1: Critical Bug Fixes
 - Fixed thinking box streaming with chunk_callback and tkinter after(0)
 - Fixed qwen2.5:32b VRAM OOM by reducing GPU layers and context window
 - Demoted qwen2.5:32b to only trigger on explicitly complex queries
