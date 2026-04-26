@@ -16,42 +16,29 @@ Jarvis: Jarvis online. Ready when you are.
 [ResponseWorker] Thread started, waiting for queries...
 [Mic] Stream init failed, retrying...
 [Mic] Stream init failed, retrying...
-[on_send] Called with text: 'which model are you...'
-You (typed): which model are you
-[on_send] Put ('text', 'which model are you...') into input_queue
-[ProcessQueue] Received query: source=text, text='which model are you...'
-[ProcessQueue] Putting query into pending_queue: 'which model are you...'
-[ResponseWorker] Received query: 'which model are you...'
-[ResponseWorker] Step 1: Got query from queue: 'which model are you...'
-[ResponseWorker] Step 2: Checking direct skills...
-[ResponseWorker] Step 2: No direct skill matched, routing to LLM
-[ResponseWorker] Step 3: Calling ollama API...
-[Model] Using Ollama with qwen2.5:14b
 [Thinking] Panel visible
-[ResponseWorker] Step 3: Got response='I am Qwen-14B, an advanced language model designed...'
-[ResponseWorker] Step 4: Adding to history and calling process_response...
-[Context] Added 37 tokens (total: 37/256000)
-[ResponseWorker] Step 5: Calling process_response with response='I am Qwen-14B, an advanced language model designed...'
-
-Jarvis: I am Qwen-14B, an advanced language model designed to assist with a variety of tasks and provide information. How can I help you today?
-[ResponseWorker] Step 5: process_response completed successfully
-[ResponseWorker] Query processing complete
-[on_send] Called with text: 'switch to 32b...'
-You (typed): switch to 32b
-[on_send] Put ('text', 'switch to 32b...') into input_queue
-[ProcessQueue] Received query: source=text, text='switch to 32b...'
-[ProcessQueue] Putting query into pending_queue: 'switch to 32b...'
-[ResponseWorker] Received query: 'switch to 32b...'
-[ResponseWorker] Step 1: Got query from queue: 'switch to 32b...'
+[on_send] Called with text: 'hello there...'
+You (typed): hello there
+[on_send] Put ('text', 'hello there...') into input_queue
+[ProcessQueue] Received query: source=text, text='hello there...'
+[ProcessQueue] Putting query into pending_queue: 'hello there...'
+[ResponseWorker] Received query: 'hello there...'
+[ResponseWorker] Step 1: Got query from queue: 'hello there...'
 [ResponseWorker] Step 2: Checking direct skills...
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
-[Model] Using Ollama with qwen2.5:14b
-[ResponseWorker] Step 3: Got response='I'm currently running as Qwen-14B, but I don't hav...'
+[Model] Using Ollama with deepseek-r1:32b
+[ResponseWorker] Step 3: Got response='<thinking>Analysis: What did the user specifically...'
 [ResponseWorker] Step 4: Adding to history and calling process_response...
-[Context] Added 55 tokens (total: 92/256000)
-[ResponseWorker] Step 5: Calling process_response with response='I'm currently running as Qwen-14B, but I don't hav...'
+[Context] Added 115 tokens (total: 115/256000)
+[ResponseWorker] Step 5: Calling process_response with response='The user greeted me with "hello there," which is a...'
 
-Jarvis: I'm currently running as Qwen-14B, but I don't have the capability to switch models myself. If you need access to a different model or specific features, let me know, and I'll see how we can proceed with that.
+Jarvis: The user greeted me with "hello there," which is a casual and friendly way of saying hello. They didn't provide any specific request or question beyond the greeting.
+
+
+Since the user only provided a greeting without any follow-up request, the appropriate response is to acknowledge their greeting and offer assistance. This keeps the conversation open for them to continue if they have something they need help with.
+
+Hello! How can I assist you today?
+[ResponseWorker] Step 5: process_response completed successfully
 [Clipboard] Conversation log copied to clipboard
 [Clipboard] Conversation log copied to clipboard

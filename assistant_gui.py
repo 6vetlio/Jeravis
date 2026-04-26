@@ -4727,24 +4727,19 @@ Then briefly explain why."""
                     chunk_count[0] += 1
                     output_tokens[0] += len(chunk) // 4  # Estimate: ~4 chars per token
                     
-                    # Track thinking tags and only stream content inside them
-                    if "<thinking>" in chunk:
-                        in_thinking_tag[0] = True
+                    # Track thinking tags presence
+                    if "<thinking>" in chunk or "``" in chunk:
                         had_thinking_tags[0] = True
-                        chunk = chunk.replace("<thinking>", "")
-                    if "</thinking>" in chunk:
-                        in_thinking_tag[0] = False
-                        chunk = chunk.replace("</thinking>", "")
                     
-                    if in_thinking_tag[0]:
-                        if chunk_count[0] == 1 or chunk_count[0] % 50 == 0:
-                            self.log(f"[Thinking] Chunk #{chunk_count[0]}: '{chunk[:30]}...'", debug=True)
-                        try:
-                            self.append_thinking(chunk)
-                            if chunk_count[0] == 1:
-                                self.hide_loading_indicator()
-                        except Exception as e:
-                            self.log(f"[Thinking] GUI update error: {e}", debug=True)
+                    # Append all chunks to thinking box during streaming
+                    if chunk_count[0] == 1 or chunk_count[0] % 50 == 0:
+                        self.log(f"[Thinking] Chunk #{chunk_count[0]}: '{chunk[:30]}...'", debug=True)
+                    try:
+                        self.append_thinking(chunk)
+                        if chunk_count[0] == 1:
+                            self.hide_loading_indicator()
+                    except Exception as e:
+                        self.log(f"[Thinking] GUI update error: {e}", debug=True)
                 
                 # Check which API provider to use
                 try:

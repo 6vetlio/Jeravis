@@ -6,12 +6,12 @@ A powerful AI voice assistant with multi-model routing, vision analysis, autonom
 
 ### AI & Models
 - **Multi-Model Routing**: Automatically selects best model based on query complexity
-  - `qwen2.5:7b` - Tiny one-word prompts under 15 characters
-  - `qwen2.5:14b` - Default conversational model
-  - `qwen2.5:32b` - Long detailed analysis prompts over 300 characters
+  - `deepseek-r1:8b` - Tiny one-word prompts under 15 characters (with native reasoning)
+  - `deepseek-r1:32b` - Default conversational model and long detailed analysis (with native reasoning)
   - `qwen2.5-coder:32b-instruct-q4_K_M` - Coding/debug/error/bug/python/script/function/implement queries
   - `llava:latest` - Vision/image analysis
-- **Smart Model Selection**: Routes normal conversation to 14B by default, with narrow rules for 7B, coder 32B, and large 32B
+- **Model Handoff System**: Automatic detection of model switch requests (e.g., "switch to larger model")
+- **Smart Model Selection**: Routes normal conversation to 32B by default, with narrow rules for 8B and coder 32B
 - **GPU Optimization**: Configurable GPU layer allocation per model
 - **Model Unloading**: Automatically unloads models on app close to free RAM
 - **External API Support**: OpenAI, Anthropic, Kimi, SWE API integration
@@ -36,6 +36,8 @@ A powerful AI voice assistant with multi-model routing, vision analysis, autonom
 - **Circuit Breaker**: Auto-pauses after 3 consecutive errors to prevent loops
 - **Manual Control**: Pause/resume autonomous mode via GUI
 - **Thinking Display**: Live output streams into the embedded thinking panel and popup window
+- **Real-time Token Counting**: Displays input, output, and total token counts in thinking box
+- **Forced Reasoning**: System prompt enforces 2-pass reasoning for all models
 
 ### Safety & Security
 - **Sandbox Mode**: Simulates PC actions without execution
@@ -91,7 +93,7 @@ A powerful AI voice assistant with multi-model routing, vision analysis, autonom
 ## Requirements
 
 - Python 3.11
-- Ollama with models installed (qwen2.5:7b, qwen2.5:14b, qwen2.5:32b, qwen2.5-coder:32b-instruct-q4_K_M, llava:latest)
+- Ollama with models installed (deepseek-r1:8b, deepseek-r1:32b, qwen2.5-coder:32b-instruct-q4_K_M, llava:latest)
 - Windows (PowerShell for PC control)
 - Microphone
 - RTX 4070 (12GB VRAM) or equivalent GPU recommended for large models
@@ -103,9 +105,8 @@ A powerful AI voice assistant with multi-model routing, vision analysis, autonom
 1. Install Ollama: https://ollama.com
 2. Pull required models:
    ```powershell
-   ollama pull qwen2.5:7b
-   ollama pull qwen2.5:14b
-   ollama pull qwen2.5:32b
+   ollama pull deepseek-r1:8b
+   ollama pull deepseek-r1:32b
    ollama pull qwen2.5-coder:32b-instruct-q4_K_M
    ollama pull llava:latest
    ```
@@ -205,9 +206,9 @@ At launch, Jarvis tests the configured Ollama host.
 Jarvis routes prompts by intent. Coding keywords are checked first.
 
 - Coding/debug/error/bug/python/script/function/implement queries → `qwen2.5-coder:32b-instruct-q4_K_M`
-- Long detailed analysis over 300 characters containing detail/explain/analyze/comprehensive → `qwen2.5:32b`
-- Tiny non-coding one-word prompts under 15 characters → `qwen2.5:7b`
-- Normal conversation → `qwen2.5:14b`
+- Long detailed analysis over 300 characters containing detail/explain/analyze/comprehensive → `deepseek-r1:32b`
+- Tiny non-coding one-word prompts under 15 characters → `deepseek-r1:8b`
+- Normal conversation → `deepseek-r1:32b`
 
 Jarvis receives the actual active model name in the system prompt:
 `You are currently running on: <model>`
@@ -227,9 +228,8 @@ Models are configured with specific GPU layer allocations in `config.py`:
 
 ```python
 MODEL_CONFIG = {
-    "qwen2.5:7b": {"num_gpu": 99, "num_thread": 12},
-    "qwen2.5:14b": {"num_gpu": 99, "num_thread": 12},
-    "qwen2.5:32b": {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
+    "deepseek-r1:8b": {"num_gpu": 99, "num_thread": 12},
+    "deepseek-r1:32b": {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     "qwen2.5-coder:32b-instruct-q4_K_M": {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     "llava:latest": {"num_gpu": 99, "num_thread": 12},
 }
@@ -238,9 +238,10 @@ MODEL_CONFIG = {
 ### Smart Routing Logic
 Queries are automatically routed to the appropriate model:
 - **Coding queries** containing `code`, `script`, `function`, `python`, `debug`, `implement`, `error`, or `bug` → `qwen2.5-coder:32b-instruct-q4_K_M`
-- **Long detailed analysis** over 300 characters containing `detail`, `explain`, `analyze`, or `comprehensive` → `qwen2.5:32b`
-- **Tiny non-coding one-word prompts** under 15 characters → `qwen2.5:7b`
-- **Default conversation** → `qwen2.5:14b`
+- **Long detailed analysis** over 300 characters containing `detail`, `explain`, `analyze`, or `comprehensive` → `deepseek-r1:32b`
+- **Tiny non-coding one-word prompts** under 15 characters → `deepseek-r1:8b`
+- **Default conversation** → `deepseek-r1:32b`
+- **Model handoff requests** (e.g., "switch to larger model") → `deepseek-r1:32b`
 
 ## Direct Skills
 
@@ -287,9 +288,9 @@ Key constants in `assistant_gui.py`:
 
 ```python
 # Models
-OLLAMA_MODEL = "qwen2.5:7b"
-OLLAMA_SECONDARY_MODEL = "qwen2.5:14b"
-OLLAMA_LARGE_MODEL = "qwen2.5:32b"
+OLLAMA_MODEL = "deepseek-r1:8b"
+OLLAMA_SECONDARY_MODEL = "deepseek-r1:32b"
+OLLAMA_LARGE_MODEL = "deepseek-r1:32b"
 OLLAMA_CODING_MODEL = "qwen2.5-coder:32b-instruct-q4_K_M"
 VISION_MODEL = "llava:latest"
 
@@ -327,9 +328,9 @@ WAKE_WORD_SIMILARITY_THRESHOLD = 0.72
 
 ### Model OOM Crashes (Status 500)
 - Large models (32B) may exceed VRAM on 8GB cards
-- Jarvis automatically falls back to qwen2.5:7b on crash
+- Jarvis automatically falls back to deepseek-r1:8b on crash
 - Adjust `MODEL_CONFIG` if your GPU cannot keep the 32B models resident
-- Use the 14B model for normal conversation when 32B is unnecessary
+- Use the 8B model for normal conversation when 32B is unnecessary
 
 ### Voice Cutoffs
 - If Jarvis cuts you off too early, adjust thresholds:
@@ -355,7 +356,7 @@ WAKE_WORD_SIMILARITY_THRESHOLD = 0.72
 ### High RAM Usage
 - Models are kept in memory for 5 minutes after use (OLLAMA_KEEP_ALIVE)
 - Jarvis automatically unloads models on app close
-- Use smaller models (7B, 14B) for frequent queries
+- Use smaller models (8B, 32B) for frequent queries
 - 32B models require ~20GB RAM, ensure sufficient system memory
 
 ## Hardware Context
@@ -367,7 +368,18 @@ Tested on:
 
 ## Development History
 
-### Phase 3: Jarvis Polish Pass (Latest)
+### Phase 4: v2.0 Reasoning Model Upgrade (Latest)
+- Upgraded to DeepSeek-R1 models (8b and 32b) with native reasoning capabilities
+- Removed qwen2.5:7b, qwen2.5:14b, qwen2.5:32b models
+- Added model handoff system for automatic detection of model switch requests
+- Implemented real-time token counting in thinking box (input, output, total)
+- Added forced 2-pass reasoning via system prompt for all models
+- Updated thinking tag extraction to handle both `<thinking>` and `` tags
+- Fixed thinking box streaming to display all generated content
+- Updated initialization scripts for Vast.ai cloud deployment
+- Added backup system with local and GitHub preservation
+
+### Phase 3: Jarvis Polish Pass
 - Normal conversation now routes to `qwen2.5:14b`; `qwen2.5:7b` is only for tiny one-word prompts
 - Coding routing is restricted to explicit coding/debug keywords
 - The active model name is injected into the system prompt so Jarvis can report it accurately
