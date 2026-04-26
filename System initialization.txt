@@ -38,15 +38,12 @@ echo "Step 5: Opening firewall port 8081..."
 sudo ufw allow 8081/tcp 2>/dev/null || true
 sudo ufw reload 2>/dev/null || true
 
-echo "Step 6: Pulling models (this will take 20-40 minutes, ~40GB total)..."
-echo "Pulling qwen2.5:7b (~4.7GB)..."
-ollama pull qwen2.5:7b
+echo "Step 6: Pulling models (this will take 20-40 minutes, ~30GB total)..."
+echo "Pulling deepseek-r1:8b (~6GB)..."
+ollama pull deepseek-r1:8b
 
-echo "Pulling qwen2.5:14b (~9.0GB)..."
-ollama pull qwen2.5:14b
-
-echo "Pulling qwen2.5:32b (~19GB)..."
-ollama pull qwen2.5:32b
+echo "Pulling deepseek-r1:32b (~20GB)..."
+ollama pull deepseek-r1:32b
 
 echo "Pulling qwen2.5-coder:32b-instruct-q4_K_M (~19GB)..."
 ollama pull qwen2.5-coder:32b-instruct-q4_K_M
@@ -75,12 +72,11 @@ fi
 echo ""
 echo "=== Setup Complete ==="
 echo "Ollama is now running on http://0.0.0.0:8081"
-echo "All 5 models have been pulled successfully:"
-echo "  - qwen2.5:7b"
-echo "  - qwen2.5:14b"
-echo "  - qwen2.5:32b"
-echo "  - qwen2.5-coder:32b-instruct-q4_K_M"
-echo "  - llava:latest"
+echo "All 4 models have been pulled successfully:"
+echo "  - deepseek-r1:8b (native reasoning)"
+echo "  - deepseek-r1:32b (full reasoning)"
+echo "  - qwen2.5-coder:32b-instruct-q4_K_M (coding)"
+echo "  - llava:latest (vision)"
 echo ""
 echo "Get your instance IP and port from Vast.ai dashboard (e.g., 8081 or 14342)"
 echo ""

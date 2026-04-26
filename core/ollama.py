@@ -40,16 +40,24 @@ def select_model_for_query(query: str) -> str:
     lowered = stripped.lower()
     words = stripped.split()
     
+    # Detect explicit model handoff requests
+    handoff_phrases = [
+        "switch to", "use larger", "hand off to", "upgrade model",
+        "use 32b", "need more power", "bigger model", "stronger model"
+    ]
+    if any(phrase in lowered for phrase in handoff_phrases):
+        return OLLAMA_LARGE_MODEL  # Force route to 32b for handoff requests
+    
     if is_coding_query(query):
         return OLLAMA_CODING_MODEL  # qwen2.5-coder:32b-instruct-q4_K_M
     
     if len(query) > 300 and any(word in lowered for word in ["detail", "explain", "analyze", "comprehensive"]):
-        return OLLAMA_LARGE_MODEL  # qwen2.5:32b - last resort due to VRAM constraints
+        return OLLAMA_LARGE_MODEL  # deepseek-r1:32b - last resort due to VRAM constraints
     
     if len(stripped) < 15 and len(words) == 1:
-        return OLLAMA_MODEL  # qwen2.5:7b - only for tiny one-word prompts like "hello"
+        return OLLAMA_MODEL  # deepseek-r1:8b - only for tiny one-word prompts like "hello"
     
-    return OLLAMA_SECONDARY_MODEL  # qwen2.5:14b - default conversational model
+    return OLLAMA_SECONDARY_MODEL  # deepseek-r1:32b - default conversational model
 
 
 def extract_ollama_content(chunk):
@@ -297,6 +305,14 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
 def extract_thinking_content(response: str):
     """Extract thinking content from response if present."""
     import re
+    # Handle DeepSeek-R1 `` tags
+    thinking_match = re.search(r'<think>(.*?)</think>', response, re.DOTALL | re.IGNORECASE)
+    if thinking_match:
+        thinking_content = thinking_match.group(1).strip()
+        # Remove the thinking tags from the response
+        clean_response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL | re.IGNORECASE).strip()
+        return thinking_content, clean_response
+    # Handle standard <thinking> tags
     thinking_match = re.search(r'<thinking>(.*?)</thinking>', response, re.DOTALL | re.IGNORECASE)
     if thinking_match:
         thinking_content = thinking_match.group(1).strip()

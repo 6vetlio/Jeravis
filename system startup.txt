@@ -79,6 +79,8 @@ if curl -s http://localhost:8081/api/tags > /dev/null 2>&1; then
     curl -s http://localhost:8081/api/tags | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | while read model; do
         echo "  - $model"
     done
+    echo ""
+    echo "Note: DeepSeek-R1 models have built-in reasoning/thinking capabilities"
 else
     echo "✗ Ollama failed to start"
     echo "Check logs: cat /tmp/ollama.log"

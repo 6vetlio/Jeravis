@@ -4708,16 +4708,24 @@ Then briefly explain why."""
                 
                 # Clear thinking box before new query and add header with model
                 selected_model = select_model_for_query(query)
+                
+                # Estimate input tokens
+                estimated_input = (len(query) + len(str(self.history[-8:]))) // 4
+                
                 self.append_thinking(f"\n--- [Msg #{self.message_id}] Thinking with {selected_model} ---\n")
+                self.append_thinking(f"[Input: {estimated_input} tokens]\n")
                 
                 chunk_count = [0]
                 in_thinking_tag = [False]
                 had_thinking_tags = [False]
+                input_tokens = [estimated_input]
+                output_tokens = [0]
                 
                 def update_thinking(chunk):
                     if not chunk:
                         return
                     chunk_count[0] += 1
+                    output_tokens[0] += len(chunk) // 4  # Estimate: ~4 chars per token
                     
                     # Track thinking tags and only stream content inside them
                     if "<thinking>" in chunk:
@@ -4781,6 +4789,11 @@ Then briefly explain why."""
                         response = f"Error processing your request: {e}"
                 
                 if response != INTERRUPTED_RESPONSE:
+                    # Display output token count
+                    total_tokens = input_tokens[0] + output_tokens[0]
+                    self.append_thinking(f"[Output: {output_tokens[0]} tokens]\n")
+                    self.append_thinking(f"[Total: {total_tokens} tokens]\n")
+                    
                     # Check if any thinking tags were present during streaming
                     if not had_thinking_tags[0]:
                         self.append_thinking("No reasoning generated\n")

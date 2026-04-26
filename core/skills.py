@@ -177,11 +177,26 @@ def get_music_response(query: str) -> str | None:
     return "I can play music for you. What would you like to hear?"
 
 
+def is_model_switch_query(query: str) -> bool:
+    """Check if query is requesting a model switch."""
+    handoff_phrases = [
+        "switch to", "use larger", "hand off to", "upgrade model",
+        "use 32b", "need more power", "bigger model", "stronger model"
+    ]
+    lowered = query.lower()
+    return any(phrase in lowered for phrase in handoff_phrases)
+
+
 def handle_direct_query(query: str, memory: dict) -> str | None:
     """Handle queries directly without LLM routing.
     
     Returns the response if handled, None if should route to LLM.
     """
+    # Check for model switch request first
+    if is_model_switch_query(query):
+        # Let select_model_for_query handle the routing
+        return None
+    
     # Try weather first
     weather_response = get_weather_response(query)
     if weather_response is not None:

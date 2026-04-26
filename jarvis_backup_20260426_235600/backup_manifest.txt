@@ -1,0 +1,25 @@
+Jarvis Backup Manifest
+Created: 2026-04-26 23:56:00
+Purpose: Backup before DeepSeek-R1 reasoning model upgrade
+
+Files backed up:
+- Python files: 17 files
+- JSON files: 10 files
+- TXT files: 5 files
+- PNG files: 22 files
+- Directories: plugins/, themes/, core/, ui/
+
+Current model configuration:
+- OLLAMA_MODEL: qwen2.5:7b
+- OLLAMA_SECONDARY_MODEL: qwen2.5:14b
+- OLLAMA_LARGE_MODEL: qwen2.5:32b
+- OLLAMA_CODING_MODEL: qwen2.5-coder:32b-instruct-q4_K_M
+- VISION_MODEL: llava:latest
+- OLLAMA_HOST: http://94.63.174.45:14342/
+
+Current plugins:
+- web_search.py
+- wikipedia.py
+- wolfram.py
+
+Git tag: backup-before-reasoning-upgrade

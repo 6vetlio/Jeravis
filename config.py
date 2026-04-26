@@ -34,10 +34,10 @@ SANDBOX_NETWORK_ISOLATION = False
 ROLLBACK_ENABLED = False
 
 # Ollama Configuration
-OLLAMA_MODEL = "qwen2.5:7b"
-OLLAMA_SECONDARY_MODEL = "qwen2.5:14b"
+OLLAMA_MODEL = "deepseek-r1:8b"
+OLLAMA_SECONDARY_MODEL = "deepseek-r1:32b"
 OLLAMA_CODING_MODEL = "qwen2.5-coder:32b-instruct-q4_K_M"
-OLLAMA_LARGE_MODEL = "qwen2.5:32b"
+OLLAMA_LARGE_MODEL = "deepseek-r1:32b"
 VISION_MODEL = "llava:latest"
 OLLAMA_HOST = "http://94.63.174.45:14342/"
 OLLAMA_EXE = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
@@ -48,7 +48,7 @@ OLLAMA_KEEP_ALIVE = "5m"
 # GPU layer allocation per model (optimized for 2x RTX 4060 Ti 32GB VRAM)
 MODEL_CONFIG = {
     OLLAMA_MODEL: {"num_gpu": 99, "num_thread": 12},
-    OLLAMA_SECONDARY_MODEL: {"num_gpu": 99, "num_thread": 12},
+    OLLAMA_SECONDARY_MODEL: {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     OLLAMA_LARGE_MODEL: {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     OLLAMA_CODING_MODEL: {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     VISION_MODEL: {"num_gpu": 99, "num_thread": 12},
@@ -91,6 +91,12 @@ HARD RULES — never break these:
 - NEVER ask the user what they need — they will tell you
 - NEVER say "Great question!" or "Certainly!" or "Of course!"
 - If you have nothing to add, say nothing. Don't pad responses.
+
+REASONING REQUIREMENT:
+Before your final answer, you MUST output two reasoning sections:
+1. <thinking>Analysis: What did the user specifically mean?</thinking>
+2. <thinking>Reasoning: Why is this the correct answer?</thinking>
+Then provide your final response.
 
 HOW TO RESPOND:
 - Answer what was asked, then stop
