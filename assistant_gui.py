@@ -4066,33 +4066,33 @@ class JarvisGUI:
                 reasoning_mode = reasoning_var.get()
                 profile = profile_var.get()
                 
-                # Update MODEL_CONFIG
+                # Apply profile presets first (overrides individual settings)
+                if profile == "Fast":
+                    context = 1024
+                    gpu_layers = 35
+                elif profile == "Balanced":
+                    context = 2048
+                    gpu_layers = 60
+                elif profile == "Quality":
+                    context = 4096
+                    gpu_layers = 99
+                
+                # Update MODEL_CONFIG with validated settings
                 for model in MODEL_CONFIG:
                     MODEL_CONFIG[model]["num_ctx"] = context
                     MODEL_CONFIG[model]["num_gpu"] = gpu_layers
                     if thread_count != "Auto":
                         MODEL_CONFIG[model]["num_thread"] = int(thread_count)
                 
-                # Apply profile presets
-                if profile == "Fast":
-                    for model in MODEL_CONFIG:
-                        MODEL_CONFIG[model]["num_ctx"] = 1024
-                        MODEL_CONFIG[model]["num_gpu"] = 35
-                elif profile == "Balanced":
-                    for model in MODEL_CONFIG:
-                        MODEL_CONFIG[model]["num_ctx"] = 2048
-                        MODEL_CONFIG[model]["num_gpu"] = 60
-                elif profile == "Quality":
-                    for model in MODEL_CONFIG:
-                        MODEL_CONFIG[model]["num_ctx"] = 4096
-                        MODEL_CONFIG[model]["num_gpu"] = 99
-                
-                # Update reasoning mode in system prompt
-                global SYSTEM_PROMPT
-                if reasoning_mode == "None":
-                    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("REASONING REQUIREMENT:\nBefore your final answer, you MUST output two reasoning sections:\n1. <thinking>Analysis: What did the user specifically mean?</thinking>\n2. <thinking>Reasoning: Why is this the correct answer?</thinking>\nThen provide your final response.\n\n", "")
-                elif reasoning_mode == "Smart":
-                    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("REASONING REQUIREMENT:\nBefore your final answer, you MUST output two reasoning sections:\n1. <thinking>Analysis: What did the user specifically mean?</thinking>\n2. <thinking>Reasoning: Why is this the correct answer?</thinking>\nThen provide your final response.\n\n", "REASONING REQUIREMENT:\nFor complex queries, output reasoning sections in <thinking> tags. For simple questions, answer directly.\n\n")
+                # Store reasoning mode preference (don't modify SYSTEM_PROMPT at runtime)
+                # The reasoning mode will be handled by the model selection logic
+                self.performance_settings = {
+                    "context": context,
+                    "gpu_layers": gpu_layers,
+                    "thread_count": thread_count,
+                    "reasoning_mode": reasoning_mode,
+                    "profile": profile
+                }
                 
                 self.log(f"[Performance] Settings applied: Context={context}, GPU={gpu_layers}, Threads={thread_count}, Reasoning={reasoning_mode}, Profile={profile}")
                 dialog.destroy()
