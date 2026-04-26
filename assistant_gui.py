@@ -4,6 +4,27 @@ import sys
 # Import config first to get OLLAMA_HOST, then set environment variable before importing ollama
 sys.path.insert(0, os.path.dirname(__file__))
 from config import OLLAMA_HOST
+def load_api_keys():
+    """Load API keys from api_keys.json"""
+    if os.path.exists(API_KEYS_FILE):
+        try:
+            with open(API_KEYS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[API Keys] Failed to load: {e}")
+    return {}
+
+
+# Load API keys first to get OLLAMA_HOST setting
+api_keys = load_api_keys()
+saved_ollama_host = api_keys.get("ollama_host", "")
+
+# Use saved host if available, otherwise use config default
+if saved_ollama_host:
+    OLLAMA_HOST = normalize_ollama_host(saved_ollama_host)
+else:
+    OLLAMA_HOST = normalize_ollama_host(OLLAMA_HOST)
+
 os.environ['OLLAMA_HOST'] = OLLAMA_HOST
 
 import json
@@ -630,13 +651,16 @@ def save_command_history(history: dict):
 
 
 def save_conversation_history(history: list):
-    """Save conversation history to file"""
+    """Save conversation history to file (append mode to preserve history)"""
     try:
-        with open(CONVERSATION_HISTORY_FILE, "w", encoding="utf-8") as f:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(CONVERSATION_HISTORY_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n=== SESSION START: {timestamp} ===\n")
             for msg in history:
                 role = msg.get("role", "unknown")
                 content = msg.get("content", "")
-                f.write(f"{role.upper()}: {content}\n\n")
+                f.write(f"{role.upper()}: {content}\n")
+            f.write(f"=== SESSION END ===\n")
     except Exception as e:
         print(f"[Conversation History error] Failed to save: {e}")
 
@@ -4041,24 +4065,16 @@ class JarvisGUI:
         
         # Save function
         def save_api_config():
-            # Save OLLAMA_HOST to config.py
+            # Save OLLAMA_HOST to api_keys.json (not config.py)
             new_ollama_host = normalize_ollama_host(ollama_host_var.get())
             if new_ollama_host:
                 try:
                     set_ollama_host(new_ollama_host)
-                    config_path = os.path.join(os.path.dirname(__file__), "config.py")
-                    with open(config_path, 'r') as f:
-                        config_content = f.read()
-                    # Replace OLLAMA_HOST line
-                    import re
-                    config_content = re.sub(
-                        r'OLLAMA_HOST = "[^"]*"',
-                        f'OLLAMA_HOST = "{new_ollama_host}"',
-                        config_content
-                    )
-                    with open(config_path, 'w') as f:
-                        f.write(config_content)
-                    self.log("[Settings] Ollama Host saved to config.py")
+                    # Save to api_keys.json
+                    api_keys["ollama_host"] = new_ollama_host
+                    with open(API_KEYS_FILE, 'w') as f:
+                        json.dump(api_keys, f, indent=2)
+                    self.log(f"[Settings] Ollama Host saved to api_keys.json: {new_ollama_host}")
                 except Exception as e:
                     self.log(f"[Settings] Failed to save Ollama Host: {e}")
             
@@ -4727,19 +4743,33 @@ Then briefly explain why."""
                     chunk_count[0] += 1
                     output_tokens[0] += len(chunk) // 4  # Estimate: ~4 chars per token
                     
-                    # Track thinking tags presence
-                    if "<thinking>" in chunk or "``" in chunk:
+                    # Track thinking tags and only stream content inside them
+                    # Handle both <thinking> and DeepSeek-R1 `` tags
+                    if "<thinking>" in chunk:
+                        in_thinking_tag[0] = True
                         had_thinking_tags[0] = True
+                        chunk = chunk.replace("<thinking>", "")
+                    if "</thinking>" in chunk:
+                        in_thinking_tag[0] = False
+                        chunk = chunk.replace("</thinking>", "")
+                    if "``" in chunk:
+                        in_thinking_tag[0] = True
+                        had_thinking_tags[0] = True
+                        chunk = chunk.replace("``", "")
+                    if "``" in chunk:
+                        in_thinking_tag[0] = False
+                        chunk = chunk.replace("``", "")
                     
-                    # Append all chunks to thinking box during streaming
-                    if chunk_count[0] == 1 or chunk_count[0] % 50 == 0:
-                        self.log(f"[Thinking] Chunk #{chunk_count[0]}: '{chunk[:30]}...'", debug=True)
-                    try:
-                        self.append_thinking(chunk)
-                        if chunk_count[0] == 1:
-                            self.hide_loading_indicator()
-                    except Exception as e:
-                        self.log(f"[Thinking] GUI update error: {e}", debug=True)
+                    # Only append content if we're inside thinking tags
+                    if in_thinking_tag[0]:
+                        if chunk_count[0] == 1 or chunk_count[0] % 50 == 0:
+                            self.log(f"[Thinking] Chunk #{chunk_count[0]}: '{chunk[:30]}...'", debug=True)
+                        try:
+                            self.append_thinking(chunk)
+                            if chunk_count[0] == 1:
+                                self.hide_loading_indicator()
+                        except Exception as e:
+                            self.log(f"[Thinking] GUI update error: {e}", debug=True)
                 
                 # Check which API provider to use
                 try:

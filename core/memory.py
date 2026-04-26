@@ -38,9 +38,20 @@ def load_memory():
 
 
 def save_memory(memory):
-    """Save memory to file."""
+    """Save memory to file (merge with existing to preserve data)."""
+    existing = load_memory()
+    # Merge facts, avoiding duplicates
+    existing_facts = set(existing.get("facts", []))
+    new_facts = set(memory.get("facts", []))
+    merged_facts = list(existing_facts.union(new_facts))
+    
+    merged_memory = {
+        "facts": merged_facts,
+        "conversation_count": max(existing.get("conversation_count", 0), memory.get("conversation_count", 0))
+    }
+    
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(normalize_memory(memory), f, indent=2, ensure_ascii=False)
+        json.dump(merged_memory, f, indent=2, ensure_ascii=False)
 
 
 def add_memory_fact(fact: str, memory: dict):
@@ -66,12 +77,13 @@ def load_personality():
 
 
 def save_personality_trait(trait: str):
-    """Save a personality trait."""
+    """Save a personality trait (append with timestamp to preserve history)."""
     current = load_personality()
     traits = current.split("\n") if current else []
     trait = trait.strip()
-    if trait not in traits:
-        traits.append(trait)
+    if trait and trait not in traits:
+        timestamp = __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        traits.append(f"[{timestamp}] {trait}")
         with open(PERSONALITY_FILE, "w", encoding="utf-8") as f:
             f.write("\n".join(traits))
         print(f"[Personality] Added: {trait}")
