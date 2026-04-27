@@ -1,7 +1,7 @@
 ==================================================
   JARVIS - Initialising...
 ==================================================
-[Ollama] Showing connection choice dialog...
+[Ollama] No Ollama host configured. Showing connection choice dialog...
 [TTS] Loading Kokoro voice engine...
 [Mic] Using device index 1
 [Mic] Calibrating...
@@ -15,53 +15,76 @@ Jarvis: Jarvis online. Ready when you are.
 [ResponseWorker] Thread started, waiting for queries...
 [Mic] Stream init failed, retrying...
 [Mic] Stream init failed, retrying...
-[Ollama] Switched to local instance at http://127.0.0.1:11434
-[Ollama] Starting local Ollama...
-[Ollama] Local Ollama started. Waiting for it to be ready...
-[Ollama] Local Ollama is ready
-[Performance] Settings applied: Context=4096, GPU=99, Threads=12, Reasoning=Force, Profile=Quality
-[on_send] Called with text: 'THINK ABOUT SOMETHING FUN...'
-You (typed): THINK ABOUT SOMETHING FUN
-[on_send] Put ('text', 'THINK ABOUT SOMETHING FUN...') into input_queue
-[ProcessQueue] Received query: source=text, text='THINK ABOUT SOMETHING FUN...'
-[ProcessQueue] Putting query into pending_queue: 'THINK ABOUT SOMETHING FUN...'
-[ResponseWorker] Received query: 'THINK ABOUT SOMETHING FUN...'
-[ResponseWorker] Step 1: Got query from queue: 'THINK ABOUT SOMETHING FUN...'
+[Ollama] Opening API Settings to reconfigure online URL...
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
+[API] Settings saved
+[Thinking] Panel visible
+[on_send] Called with text: 'hello...'
+You (typed): hello
+[on_send] Put ('text', 'hello...') into input_queue
+[ProcessQueue] Received query: source=text, text='hello...'
+[ProcessQueue] Putting query into pending_queue: 'hello...'
+[ResponseWorker] Received query: 'hello...'
+[ResponseWorker] Step 1: Got query from queue: 'hello...'
+[ResponseWorker] Step 2: Checking direct skills...
+[ResponseWorker] Step 2: No direct skill matched, routing to LLM
+[ResponseWorker] Step 3: Calling ollama API...
+[Model] Using Ollama with deepseek-r1:8b
+[Thinking] Chunk #1: 'Hi...'
+[ResponseWorker] Step 3: Got response='Hi there! How can I assist you today?...'
+[ResponseWorker] Step 4: Adding to history and calling process_response...
+[Context] Added 10 tokens (total: 10/256000)
+[ResponseWorker] Step 5: Calling process_response with response='Hi there! How can I assist you today?...'
+
+Jarvis: Hi there! How can I assist you today?
+[ResponseWorker] Step 5: process_response completed successfully
+[Memory] Extracted 2 fact(s) from user message
+[ResponseWorker] Query processing complete
+[on_send] Called with text: 'use 32b...'
+You (typed): use 32b
+[on_send] Put ('text', 'use 32b...') into input_queue
+[ProcessQueue] Received query: source=text, text='use 32b...'
+[ProcessQueue] Putting query into pending_queue: 'use 32b...'
+[ResponseWorker] Received query: 'use 32b...'
+[ResponseWorker] Step 1: Got query from queue: 'use 32b...'
 [ResponseWorker] Step 2: Checking direct skills...
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
 [Model] Using Ollama with deepseek-r1:32b
-[Thinking] Panel visible
+[Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
+[API] Settings saved
 [Cancel] Stopping response generation...
-[Performance] Settings applied: Context=1024, GPU=35, Threads=8, Reasoning=None, Profile=Fast
-[on_send] Called with text: 'think...'
-You (typed): think
-[on_send] Put ('text', 'think...') into input_queue
-[ProcessQueue] Received query: source=text, text='think...'
-[ProcessQueue] Interrupting and queuing: 'think...'
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[API] Testing Ollama connection...
+[API] Ollama connection successful at http://85.218.235.6:36792
+[Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
+[API] Settings saved
+[on_send] Called with text: 'stop worKing locally please...'
+You (typed): stop worKing locally please
+[on_send] Put ('text', 'stop worKing locally please...') into input_queue
+[ProcessQueue] Received query: source=text, text='stop worKing locally please...'
+[ProcessQueue] Interrupting and queuing: 'stop worKing locally please...'
 [Thinking] Panel hidden
 [Thinking] Panel visible
-[ResponseWorker] Step 3: Got response='__INTERRUPTED__...'
-[ResponseWorker] Interrupted, skipping response display
-[ResponseWorker] Received query: 'think...'
-[ResponseWorker] Step 1: Got query from queue: 'think...'
-[ResponseWorker] Step 2: Checking direct skills...
-[ResponseWorker] Step 2: No direct skill matched, routing to LLM
-[ResponseWorker] Step 3: Calling ollama API...
-[Model] Using Ollama with deepseek-r1:8b
-[Performance] Settings applied: Context=4096, GPU=99, Threads=12, Reasoning=Force, Profile=Quality
-[on_send] Called with text: 'think...'
-You (typed): think
-[on_send] Put ('text', 'think...') into input_queue
-[ProcessQueue] Received query: source=text, text='think...'
-[ProcessQueue] Interrupting and queuing: 'think...'
-[ResponseWorker] Step 3: Got response='__INTERRUPTED__...'
-[ResponseWorker] Interrupted, skipping response display
-[ResponseWorker] Received query: 'think...'
-[ResponseWorker] Step 1: Got query from queue: 'think...'
-[ResponseWorker] Step 2: Checking direct skills...
-[ResponseWorker] Step 2: No direct skill matched, routing to LLM
-[ResponseWorker] Step 3: Calling ollama API...
-[Model] Using Ollama with deepseek-r1:8b
-[Thinking] Panel hidden
+[Clipboard] Conversation log copied to clipboard
+[Clipboard] Conversation log copied to clipboard
+[Clipboard] Conversation log copied to clipboard
+[Clipboard] Conversation log copied to clipboard
+[Clipboard] Conversation log copied to clipboard
+[Clipboard] Conversation log copied to clipboard
 [Clipboard] Conversation log copied to clipboard

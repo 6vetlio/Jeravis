@@ -6,10 +6,14 @@ import datetime
 import ollama
 from config import (
     OLLAMA_MODEL, OLLAMA_SECONDARY_MODEL, OLLAMA_LARGE_MODEL, OLLAMA_CODING_MODEL,
-    OLLAMA_HOST, OLLAMA_EXE, OLLAMA_STARTUP_TIMEOUT_SECONDS, OLLAMA_RETRY_COUNT,
+    OLLAMA_EXE, OLLAMA_STARTUP_TIMEOUT_SECONDS, OLLAMA_RETRY_COUNT,
     OLLAMA_KEEP_ALIVE, MODEL_CONFIG, SYSTEM_PROMPT, INTERRUPTED_RESPONSE
 )
 from core.memory import normalize_memory, load_key_moments
+
+# Use OLLAMA_HOST from environment variable (set by GUI) instead of config.py
+# config.py has empty string by default to force GUI prompt
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 
 def is_coding_query(query: str) -> bool:
