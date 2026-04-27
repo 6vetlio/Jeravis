@@ -95,6 +95,12 @@ def run_api_server():
     api_server_running = True
     app.run(host='0.0.0.0', port=API_PORT, threaded=True)
 
+# Auto-start API server on launch
+api_server_thread = threading.Thread(target=run_api_server, daemon=True)
+api_server_thread.start()
+print(f"[API] Server auto-started on http://0.0.0.0:{API_PORT}")
+print(f"[API] OpenAI-compatible endpoint: http://localhost:{API_PORT}/v1/chat/completions")
+
 # Configure GPU acceleration for Ollama
 os.environ["OLLAMA_NUM_GPU"] = "1"
 os.environ["OLLAMA_GPU_LAYERS"] = "999"
