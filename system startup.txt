@@ -58,8 +58,8 @@ echo "✓ Existing processes stopped"
 
 echo ""
 
-# Start Ollama with optimized settings for 2x RTX 4090
-echo "Step 4: Starting Ollama with optimized settings..."
+# Start Ollama with optimized settings for 2x RTX 4090 - force IPv4
+echo "Step 4: Starting Ollama with optimized settings (IPv4)..."
 export OLLAMA_HOST=0.0.0.0:14342
 export OLLAMA_NUM_GPU=2
 export OLLAMA_GPU_LAYERS=99
@@ -68,7 +68,8 @@ export OLLAMA_NUM_THREAD=64
 if [ "$GPU_AVAILABLE" = false ]; then
     echo "  Warning: Running without GPU acceleration"
 fi
-nohup ollama serve > /tmp/ollama.log 2>&1 &
+# Force IPv4 binding by using --host flag directly
+nohup ollama serve --host 0.0.0.0 --port 14342 > /tmp/ollama.log 2>&1 &
 sleep 5
 
 # Check if Ollama is running
