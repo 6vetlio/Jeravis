@@ -2693,7 +2693,8 @@ class JarvisGUI:
             self.show_api_settings()
         
         def continue_without():
-            self.log("[Ollama] Continuing without Ollama. Will retry on first request...")
+            self.log(f"[Ollama] Continuing with current URL: {OLLAMA_HOST}")
+            self.log("[Ollama] Will retry on first request...")
             dialog.destroy()
         
         button_frame = tk.Frame(dialog, bg="#1e1e1e")
@@ -2701,8 +2702,8 @@ class JarvisGUI:
         
         tk.Button(
             button_frame,
-            text="Start Local Ollama",
-            command=start_local_ollama,
+            text="Reconfigure Online URL",
+            command=reconfigure_online,
             bg="#0e639c",
             fg="white",
             font=("Arial", 10),
@@ -2711,8 +2712,8 @@ class JarvisGUI:
         
         tk.Button(
             button_frame,
-            text="Reconfigure Online URL",
-            command=reconfigure_online,
+            text="Continue With Current URL",
+            command=continue_without,
             bg="#3c3c3c",
             fg="white",
             font=("Arial", 10),
@@ -2721,9 +2722,9 @@ class JarvisGUI:
         
         tk.Button(
             button_frame,
-            text="Continue Without Ollama",
-            command=continue_without,
-            bg="#3c3c3c",
+            text="Start Local Ollama (Fallback)",
+            command=start_local_ollama,
+            bg="#6b6b6b",
             fg="white",
             font=("Arial", 10),
             width=20
@@ -2735,9 +2736,16 @@ class JarvisGUI:
             self.log("  JARVIS - Initialising...")
             self.log("=" * 50)
 
-            # Always show connection choice dialog at startup
-            self.log("[Ollama] Showing connection choice dialog...")
-            self.root.after(100, self.show_ollama_choice_dialog)
+            # Only show connection dialog if Ollama host is not configured
+            if not OLLAMA_HOST:
+                self.log("[Ollama] No Ollama host configured. Showing connection choice dialog...")
+                self.root.after(100, self.show_ollama_choice_dialog)
+            else:
+                self.log(f"[Ollama] Using configured host: {OLLAMA_HOST}")
+                # Try to connect, show dialog if it fails
+                if not check_ollama_running():
+                    self.log(f"[Ollama] Could not connect to {OLLAMA_HOST}")
+                    self.root.after(100, self.show_ollama_choice_dialog)
 
             self.log("[TTS] Loading Kokoro voice engine...")
             _dir = os.path.dirname(os.path.abspath(__file__))
