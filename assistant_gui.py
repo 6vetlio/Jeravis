@@ -1,12 +1,39 @@
 import os
 import sys
+import json
 
-# Import config first to get OLLAMA_HOST, then set environment variable before importing ollama
-sys.path.insert(0, os.path.dirname(__file__))
-from config import OLLAMA_HOST
+# Load api_keys.json FIRST to get saved OLLAMA_HOST
+API_KEYS_FILE = os.path.join(os.path.dirname(__file__), "api_keys.json")
+
+def load_api_keys():
+    """Load API keys from api_keys.json"""
+    if os.path.exists(API_KEYS_FILE):
+        try:
+            with open(API_KEYS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[API Keys] Failed to load: {e}")
+    return {}
+
+# Load saved OLLAMA_HOST from api_keys.json BEFORE importing ollama
+api_keys = load_api_keys()
+saved_ollama_host = api_keys.get("ollama_host", "")
+
+# Set OLLAMA_HOST from saved value or use empty string
+OLLAMA_HOST = saved_ollama_host if saved_ollama_host else ""
+
+# Set environment variable BEFORE importing ollama library
 os.environ['OLLAMA_HOST'] = OLLAMA_HOST
 
-import json
+# Import config after setting OLLAMA_HOST
+sys.path.insert(0, os.path.dirname(__file__))
+from config import OLLAMA_HOST as CONFIG_OLLAMA_HOST
+
+# If config has a value and we don't have a saved value, use config's value
+if not OLLAMA_HOST and CONFIG_OLLAMA_HOST:
+    OLLAMA_HOST = CONFIG_OLLAMA_HOST
+    os.environ['OLLAMA_HOST'] = OLLAMA_HOST
+
 import queue
 import threading
 import time
@@ -194,25 +221,8 @@ def set_ollama_host(host: str) -> str:
 set_ollama_host(OLLAMA_HOST)
 
 # External API Configuration
-API_KEYS_FILE = os.path.join(os.path.dirname(__file__), "api_keys.json")
-
-def load_api_keys():
-    """Load API keys from api_keys.json"""
-    if os.path.exists(API_KEYS_FILE):
-        try:
-            with open(API_KEYS_FILE, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[API Keys] Failed to load: {e}")
-    return {}
-
-
-# Load API keys and override OLLAMA_HOST if saved
-api_keys = load_api_keys()
-saved_ollama_host = api_keys.get("ollama_host", "")
-if saved_ollama_host:
-    set_ollama_host(saved_ollama_host)
-    print(f"[Settings] Loaded Ollama Host from api_keys.json: {OLLAMA_HOST}")
+# Note: API_KEYS_FILE and load_api_keys() are already defined at the top of the file
+# OLLAMA_HOST is already loaded from api_keys.json before ollama import
 
 OPENAI_API_KEY = ""
 ANTHROPIC_API_KEY = ""
