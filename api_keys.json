@@ -3,5 +3,6 @@
   "anthropic": "",
   "kimi": "",
   "swe": "",
-  "default_provider": "ollama"
+  "default_provider": "ollama",
+  "ollama_host": "http://85.218.235.6:36792"
 }
