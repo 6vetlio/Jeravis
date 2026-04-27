@@ -15,6 +15,11 @@ from core.memory import normalize_memory, load_key_moments
 # config.py has empty string by default to force GUI prompt
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 
+# Create ollama client with remote host
+# The global ollama.chat() uses a default client that connects to localhost
+# We need to create a client with the correct host
+ollama_client = ollama.Client(host=OLLAMA_HOST)
+
 
 def is_coding_query(query: str) -> bool:
     """Determine if a query is a coding/programming question."""
@@ -194,7 +199,7 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
     last_error = None
     for attempt in range(OLLAMA_RETRY_COUNT):
         try:
-            response = ollama.chat(
+            response = ollama_client.chat(
                 model=model,
                 messages=messages,
                 stream=True,
@@ -232,7 +237,7 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
             if attempt == OLLAMA_RETRY_COUNT - 1 and model != OLLAMA_MODEL:
                 print(f"[!] Connection reset with {model}, falling back to {OLLAMA_MODEL}")
                 try:
-                    response = ollama.chat(
+                    response = ollama_client.chat(
                         model=OLLAMA_MODEL,
                         messages=build_messages(OLLAMA_MODEL),
                         stream=True,
@@ -268,7 +273,7 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
                 last_error = e
                 print(f"[!] Model crash detected (status 500), falling back to {OLLAMA_MODEL}")
                 try:
-                    response = ollama.chat(
+                    response = ollama_client.chat(
                         model=OLLAMA_MODEL,
                         messages=build_messages(OLLAMA_MODEL),
                         stream=True,

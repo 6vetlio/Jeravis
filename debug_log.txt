@@ -21,70 +21,35 @@ Jarvis: Jarvis online. Ready when you are.
 [Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
 [API] Settings saved
 [Thinking] Panel visible
-[on_send] Called with text: 'hello...'
-You (typed): hello
-[on_send] Put ('text', 'hello...') into input_queue
-[ProcessQueue] Received query: source=text, text='hello...'
-[ProcessQueue] Putting query into pending_queue: 'hello...'
-[ResponseWorker] Received query: 'hello...'
-[ResponseWorker] Step 1: Got query from queue: 'hello...'
+[on_send] Called with text: 'think...'
+You (typed): think
+[on_send] Put ('text', 'think...') into input_queue
+[ProcessQueue] Received query: source=text, text='think...'
+[ProcessQueue] Putting query into pending_queue: 'think...'
+[ResponseWorker] Received query: 'think...'
+[ResponseWorker] Step 1: Got query from queue: 'think...'
 [ResponseWorker] Step 2: Checking direct skills...
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
 [Model] Using Ollama with deepseek-r1:8b
-[Thinking] Chunk #1: 'Hi...'
-[ResponseWorker] Step 3: Got response='Hi there! How can I assist you today?...'
+[Thinking] Chunk #1: 'Sure...'
+[ResponseWorker] Step 3: Got response='Sure! I can think through a problem, analyze a sit...'
 [ResponseWorker] Step 4: Adding to history and calling process_response...
-[Context] Added 10 tokens (total: 10/256000)
-[ResponseWorker] Step 5: Calling process_response with response='Hi there! How can I assist you today?...'
+[Context] Added 45 tokens (total: 45/256000)
+[ResponseWorker] Step 5: Calling process_response with response='Sure! I can think through a problem, analyze a sit...'
 
-Jarvis: Hi there! How can I assist you today?
+Jarvis: Sure! I can think through a problem, analyze a situation, or explore ideas step by step. Please let me know what you'd like me to think about or what topic you're interested in.
 [ResponseWorker] Step 5: process_response completed successfully
-[Memory] Extracted 2 fact(s) from user message
-[ResponseWorker] Query processing complete
 [on_send] Called with text: 'use 32b...'
 You (typed): use 32b
 [on_send] Put ('text', 'use 32b...') into input_queue
 [ProcessQueue] Received query: source=text, text='use 32b...'
-[ProcessQueue] Putting query into pending_queue: 'use 32b...'
+[ProcessQueue] Interrupting and queuing: 'use 32b...'
+[ResponseWorker] Query processing complete
 [ResponseWorker] Received query: 'use 32b...'
 [ResponseWorker] Step 1: Got query from queue: 'use 32b...'
 [ResponseWorker] Step 2: Checking direct skills...
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
 [Model] Using Ollama with deepseek-r1:32b
-[Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
-[API] Settings saved
-[Cancel] Stopping response generation...
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
-[API] Settings saved
-[on_send] Called with text: 'stop worKing locally please...'
-You (typed): stop worKing locally please
-[on_send] Put ('text', 'stop worKing locally please...') into input_queue
-[ProcessQueue] Received query: source=text, text='stop worKing locally please...'
-[ProcessQueue] Interrupting and queuing: 'stop worKing locally please...'
-[Thinking] Panel hidden
-[Thinking] Panel visible
-[Clipboard] Conversation log copied to clipboard
-[Clipboard] Conversation log copied to clipboard
-[Clipboard] Conversation log copied to clipboard
-[Clipboard] Conversation log copied to clipboard
-[Clipboard] Conversation log copied to clipboard
-[Clipboard] Conversation log copied to clipboard
 [Clipboard] Conversation log copied to clipboard
