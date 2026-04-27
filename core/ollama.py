@@ -11,13 +11,12 @@ from config import (
 )
 from core.memory import normalize_memory, load_key_moments
 
-# HARDCODED REMOTE HOST - TEMPORARY FIX TO GET IT WORKING
-# The user's remote server at 85.218.235.6:36792
-OLLAMA_HOST = "http://85.218.235.6:36792"
+# Use OLLAMA_HOST from environment variable (set by GUI in assistant_gui.py)
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 # Create ollama client with remote host
 ollama_client = ollama.Client(host=OLLAMA_HOST)
-print(f"[Ollama] Using remote host: {OLLAMA_HOST}")
+print(f"[Ollama] Using host: {OLLAMA_HOST}")
 
 
 def is_coding_query(query: str) -> bool:
