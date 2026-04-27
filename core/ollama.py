@@ -12,11 +12,13 @@ from config import (
 from core.memory import normalize_memory, load_key_moments
 
 # Use OLLAMA_HOST from environment variable (set by GUI in assistant_gui.py)
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+# Note: This is read dynamically in ask_ollama to handle GUI changes
+def get_ollama_host():
+    return os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 
-# Create ollama client with remote host
-ollama_client = ollama.Client(host=OLLAMA_HOST)
-print(f"[Ollama] Using host: {OLLAMA_HOST}")
+def get_ollama_client():
+    """Create a fresh ollama client with current host configuration"""
+    return ollama.Client(host=get_ollama_host())
 
 
 def is_coding_query(query: str) -> bool:
@@ -197,7 +199,11 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
     last_error = None
     for attempt in range(OLLAMA_RETRY_COUNT):
         try:
-            response = ollama_client.chat(
+            # Create fresh client with current host configuration
+            client = get_ollama_client()
+            print(f"[Ollama] Using host: {get_ollama_host()}")
+            
+            response = client.chat(
                 model=model,
                 messages=messages,
                 stream=True,
@@ -235,7 +241,9 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
             if attempt == OLLAMA_RETRY_COUNT - 1 and model != OLLAMA_MODEL:
                 print(f"[!] Connection reset with {model}, falling back to {OLLAMA_MODEL}")
                 try:
-                    response = ollama_client.chat(
+                    # Create fresh client with current host configuration
+                    client = get_ollama_client()
+                    response = client.chat(
                         model=OLLAMA_MODEL,
                         messages=build_messages(OLLAMA_MODEL),
                         stream=True,
@@ -271,7 +279,9 @@ def ask_ollama(prompt: str, history: list, memory: dict, interrupt_event=None,
                 last_error = e
                 print(f"[!] Model crash detected (status 500), falling back to {OLLAMA_MODEL}")
                 try:
-                    response = ollama_client.chat(
+                    # Create fresh client with current host configuration
+                    client = get_ollama_client()
+                    response = client.chat(
                         model=OLLAMA_MODEL,
                         messages=build_messages(OLLAMA_MODEL),
                         stream=True,
