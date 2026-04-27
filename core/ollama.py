@@ -11,14 +11,13 @@ from config import (
 )
 from core.memory import normalize_memory, load_key_moments
 
-# Use OLLAMA_HOST from environment variable (set by GUI) instead of config.py
-# config.py has empty string by default to force GUI prompt
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+# HARDCODED REMOTE HOST - TEMPORARY FIX TO GET IT WORKING
+# The user's remote server at 85.218.235.6:36792
+OLLAMA_HOST = "http://85.218.235.6:36792"
 
 # Create ollama client with remote host
-# The global ollama.chat() uses a default client that connects to localhost
-# We need to create a client with the correct host
 ollama_client = ollama.Client(host=OLLAMA_HOST)
+print(f"[Ollama] Using remote host: {OLLAMA_HOST}")
 
 
 def is_coding_query(query: str) -> bool:
