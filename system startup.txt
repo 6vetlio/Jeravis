@@ -102,11 +102,11 @@ else
     echo "  GPU:    Not available (CPU mode)"
 fi
 echo "  Ollama: Running on http://0.0.0.0:14342"
-echo "  Server: 85.218.235.6:14342"
+echo "  Server: 85.218.235.6:36792 (Vast.ai exposed port)"
 echo ""
 echo "Commands:"
 echo "  View logs:    cat /tmp/ollama.log"
 echo "  Stop:         pkill ollama"
 echo "  Restart:      Run this script again"
-echo "  Test:         curl http://localhost:14342/api/tags"
+echo "  Test:         curl http://85.218.235.6:36792/api/tags"
 echo ""
