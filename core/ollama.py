@@ -44,29 +44,49 @@ def is_weather_query(query: str) -> bool:
 
 
 def select_model_for_query(query: str) -> str:
-    """Select the best model based on query complexity and type."""
+    """Select the best model based on query intent, not character count."""
     stripped = query.strip()
     lowered = stripped.lower()
-    words = stripped.split()
-    
-    # Detect explicit model handoff requests
-    handoff_phrases = [
+
+    # Explicit handoff to large model
+    HANDOFF_PHRASES = [
         "switch to", "use larger", "hand off to", "upgrade model",
         "use 32b", "need more power", "bigger model", "stronger model"
     ]
-    if any(phrase in lowered for phrase in handoff_phrases):
-        return OLLAMA_LARGE_MODEL  # Force route to 32b for handoff requests
-    
-    if is_coding_query(query):
-        return OLLAMA_CODING_MODEL  # qwen2.5-coder:32b-instruct-q4_K_M
-    
-    if len(query) > 300 and any(word in lowered for word in ["detail", "explain", "analyze", "comprehensive"]):
-        return OLLAMA_LARGE_MODEL  # deepseek-r1:32b - last resort due to VRAM constraints
-    
-    if len(stripped) < 15 and len(words) == 1:
-        return OLLAMA_MODEL  # deepseek-r1:8b - only for tiny one-word prompts like "hello"
-    
-    return OLLAMA_SECONDARY_MODEL  # deepseek-r1:32b - default conversational model
+    if any(phrase in lowered for phrase in HANDOFF_PHRASES):
+        return OLLAMA_LARGE_MODEL
+
+    # Greetings and short acknowledgments — always fast model
+    QUICK_INTENTS = [
+        "hello", "hi", "hey", "hellow", "sup", "yo",
+        "yes", "no", "ok", "okay", "sure", "nope",
+        "thanks", "thank you", "bye", "goodbye",
+        "good", "great", "cool", "nice", "got it", "noted"
+    ]
+    if len(lowered) < 20:
+        for intent in QUICK_INTENTS:
+            if intent in lowered or lowered in intent:
+                return OLLAMA_MODEL  # fast 8b
+
+    # Coding — specific keywords
+    CODING_KEYWORDS = [
+        "code", "script", "function", "python", "debug",
+        "implement", "bug", "error", "fix this", "write a",
+        "class ", "def ", "import ", "syntax", "compile"
+    ]
+    if any(kw in lowered for kw in CODING_KEYWORDS):
+        return OLLAMA_CODING_MODEL
+
+    # Deep analysis — explicit request for depth
+    DEEP_KEYWORDS = [
+        "explain in detail", "comprehensive", "analyze",
+        "in depth", "step by step", "full breakdown", "elaborate"
+    ]
+    if any(kw in lowered for kw in DEEP_KEYWORDS):
+        return OLLAMA_LARGE_MODEL
+
+    # Everything else — default conversational MoE model
+    return OLLAMA_SECONDARY_MODEL  # mixtral 8x7b
 
 
 def extract_ollama_content(chunk):

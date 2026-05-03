@@ -34,10 +34,10 @@ SANDBOX_NETWORK_ISOLATION = False
 ROLLBACK_ENABLED = False
 
 # Ollama Configuration
-OLLAMA_MODEL = "deepseek-r1:8b"
-OLLAMA_SECONDARY_MODEL = "deepseek-r1:32b"
-OLLAMA_CODING_MODEL = "qwen2.5-coder:32b-instruct-q4_K_M"
-OLLAMA_LARGE_MODEL = "deepseek-r1:32b"
+OLLAMA_MODEL = "deepseek-r1:8b"                              # Fast: greetings, acks
+OLLAMA_SECONDARY_MODEL = "mixtral:8x7b-instruct-v0.1-q4_K_M" # Default conversational (MoE - fast+smart)
+OLLAMA_CODING_MODEL = "deepseek-coder-v2:16b"                # Coding tasks
+OLLAMA_LARGE_MODEL = "deepseek-r1:32b"                       # Deep analysis only
 VISION_MODEL = "llava:latest"
 OLLAMA_HOST = ""  # Load from GUI settings (api_keys.json) at runtime
 OLLAMA_EXE = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
@@ -48,7 +48,7 @@ OLLAMA_KEEP_ALIVE = "5m"
 # GPU layer allocation per model (optimized for 2x RTX 4060 Ti 32GB VRAM)
 MODEL_CONFIG = {
     OLLAMA_MODEL: {"num_gpu": 99, "num_thread": 12},
-    OLLAMA_SECONDARY_MODEL: {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
+    OLLAMA_SECONDARY_MODEL: {"num_gpu": 99, "num_thread": 8, "num_ctx": 4096},
     OLLAMA_LARGE_MODEL: {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     OLLAMA_CODING_MODEL: {"num_gpu": 99, "num_thread": 12, "num_ctx": 4096},
     VISION_MODEL: {"num_gpu": 99, "num_thread": 12},

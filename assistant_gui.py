@@ -1039,42 +1039,50 @@ def is_coding_query(query: str) -> bool:
 
 
 def select_model_for_query(query: str, performance_settings=None) -> str:
-    """Select the best model based on query complexity, type, and performance settings"""
+    """Select the best model based on query intent, not character count."""
     stripped = query.strip()
     lowered = stripped.lower()
-    words = stripped.split()
-    
-    # Check performance settings if available
-    if performance_settings:
-        profile = performance_settings.get("profile", "Quality")
-        reasoning_mode = performance_settings.get("reasoning_mode", "Force")
-        
-        # Fast profile prefers smaller models
-        if profile == "Fast":
-            if is_coding_query(query):
-                return OLLAMA_CODING_MODEL
-            if len(stripped) < 15 and len(words) == 1:
-                return OLLAMA_MODEL
-            return OLLAMA_SECONDARY_MODEL  # Use 8b for fast mode
-        
-        # Quality profile prefers larger models
-        if profile == "Quality":
-            if is_coding_query(query):
-                return OLLAMA_CODING_MODEL
-            return OLLAMA_SECONDARY_MODEL  # Use 32b for quality mode
-        
-        # Balanced profile uses default logic
-    # Default logic for no performance settings or balanced profile
-    if is_coding_query(query):
-        return OLLAMA_CODING_MODEL  # qwen2.5-coder:32b-instruct-q4_K_M
-    
-    if len(query) > 300 and any(word in lowered for word in ["detail", "explain", "analyze", "comprehensive"]):
-        return OLLAMA_SECONDARY_MODEL  # deepseek-r1:32b for detailed analysis
-    
-    if len(stripped) < 15 and len(words) == 1:
-        return OLLAMA_MODEL  # deepseek-r1:8b - only for tiny one-word prompts like "hello"
-    
-    return OLLAMA_SECONDARY_MODEL  # deepseek-r1:32b - default conversational model
+
+    # Explicit handoff to large model
+    HANDOFF_PHRASES = [
+        "switch to", "use larger", "hand off to", "upgrade model",
+        "use 32b", "need more power", "bigger model", "stronger model"
+    ]
+    if any(phrase in lowered for phrase in HANDOFF_PHRASES):
+        return OLLAMA_LARGE_MODEL
+
+    # Greetings and short acknowledgments — always fast model
+    QUICK_INTENTS = [
+        "hello", "hi", "hey", "hellow", "sup", "yo",
+        "yes", "no", "ok", "okay", "sure", "nope",
+        "thanks", "thank you", "bye", "goodbye",
+        "good", "great", "cool", "nice", "got it", "noted"
+    ]
+    if len(lowered) < 20:
+        for intent in QUICK_INTENTS:
+            if intent in lowered or lowered in intent:
+                return OLLAMA_MODEL  # fast 8b
+
+    # Coding — specific keywords
+    CODING_KEYWORDS = [
+        "code", "script", "function", "python", "debug",
+        "implement", "bug", "error", "fix this", "write a",
+        "class ", "def ", "import ", "syntax", "compile"
+    ]
+    if any(kw in lowered for kw in CODING_KEYWORDS):
+        return OLLAMA_CODING_MODEL
+
+    # Deep analysis — explicit request for depth
+    DEEP_KEYWORDS = [
+        "explain in detail", "comprehensive", "analyze",
+        "in depth", "step by step", "full breakdown", "elaborate"
+    ]
+    if any(kw in lowered for kw in DEEP_KEYWORDS):
+        return OLLAMA_LARGE_MODEL
+
+    # Everything else — default conversational MoE model
+    return OLLAMA_SECONDARY_MODEL  # mixtral 8x7b
+
 
 
 def is_location_query(query: str) -> bool:
@@ -1992,6 +2000,14 @@ class JarvisGUI:
             self.vision_verification = self.memory.get("vision_verification", VISION_VERIFICATION_DEFAULT)
             self.personality = load_personality()
             self.autonomous_prompts = load_autonomous_prompts()
+            
+            # Load knowledge base on startup
+            try:
+                from core.knowledge import load_memory_into_knowledge, load_conversation_history
+                load_memory_into_knowledge(MEMORY_FILE)
+                load_conversation_history(CONVERSATION_HISTORY_FILE)
+            except Exception as e:
+                print(f"[Knowledge] Failed to load on startup: {e}")
             self.autonomous_prompt_category = self.memory.get("autonomous_prompt_category", "proactive")
             self.plugins = load_plugins()
             self.voice_commands = load_voice_commands()
@@ -4138,8 +4154,9 @@ class JarvisGUI:
                 
                 if reasoning_mode == "Force":
                     # Restore full reasoning instructions
-                    from config import SYSTEM_PROMPT
                     global SYSTEM_PROMPT
+                    from config import SYSTEM_PROMPT as _SYSTEM_PROMPT
+                    SYSTEM_PROMPT = _SYSTEM_PROMPT
                     if "REASONING REQUIREMENT:" not in SYSTEM_PROMPT:
                         SYSTEM_PROMPT = """You are Jarvis. You are direct, confident, and occasionally dry-humored. You are NOT a customer service bot.
 
@@ -4899,12 +4916,27 @@ Then briefly explain why."""
                     self.hide_loading_indicator()
                 else:
                     self.log(f"[ResponseWorker] Step 2: No direct skill matched, routing to LLM", debug=True)
+                    
+                    # Step 2c: Search personal knowledge base
+                    try:
+                        from core.knowledge import search
+                        relevant_context = search(query, n_results=3)
+                        if relevant_context:
+                            context_text = "\n".join(relevant_context)
+                            query_with_context = f"Relevant context from personal knowledge:\n{context_text}\n\nUser query: {query}"
+                            self.log(f"[Knowledge] Injected {len(relevant_context)} relevant chunks", debug=True)
+                        else:
+                            query_with_context = query
+                    except Exception as e:
+                        self.log(f"[Knowledge] Failed to search: {e}", debug=True)
+                        query_with_context = query
             except Exception as e:
                 self.log(f"[ResponseWorker ERROR] Step 2 failed: {e}", debug=True)
                 import traceback
                 self.log(traceback.format_exc(), debug=True)
                 response = None
                 thinking_output = []
+                query_with_context = query
 
             if response is None:
                 self.message_id = self.increment_message_id()
@@ -4966,11 +4998,11 @@ Then briefly explain why."""
                     if default_provider == "ollama":
                         # Use Ollama (local models)
                         self.log(f"[Model] Using Ollama with {selected_model}", debug=True)
-                        response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, capture_thinking, False, selected_model, chunk_callback=update_thinking)
+                        response = ask_ollama(query_with_context, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, capture_thinking, False, selected_model, chunk_callback=update_thinking)
                     else:
                         # Use external API
                         self.log(f"[Model] Using {default_provider} API", debug=True)
-                        response = ask_external_api(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, stream_external_thinking, default_provider)
+                        response = ask_external_api(query_with_context, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, stream_external_thinking, default_provider)
                     
                     self.log(f"[ResponseWorker] Step 3: Got response='{response[:50]}...'", debug=True)
                 except Exception as e:
@@ -4981,7 +5013,7 @@ Then briefly explain why."""
                     # Fallback to Ollama - reset chunk counter
                     chunk_count[0] = 0
                     try:
-                        response = ask_ollama(query, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, capture_thinking, False, selected_model, chunk_callback=update_thinking)
+                        response = ask_ollama(query_with_context, self.history, self.memory, self.interrupt_event, self.safety_mode, self.personality, capture_thinking, False, selected_model, chunk_callback=update_thinking)
                         self.log(f"[ResponseWorker] Step 3 (fallback): Got response='{response[:50]}...'", debug=True)
                     except Exception as e2:
                         self.log(f"[ResponseWorker ERROR] Fallback also failed: {e2}", debug=True)

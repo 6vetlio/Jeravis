@@ -15,12 +15,10 @@ Jarvis: Jarvis online. Ready when you are.
 [ResponseWorker] Thread started, waiting for queries...
 [Mic] Stream init failed, retrying...
 [Mic] Stream init failed, retrying...
-[Ollama] Opening API Settings to reconfigure online URL...
-[API] Testing Ollama connection...
-[API] Ollama connection successful at http://85.218.235.6:36792
-[Settings] Ollama Host saved to api_keys.json: http://85.218.235.6:36792
-[API] Settings saved
-[Thinking] Panel visible
+[Ollama] Switched to local instance at http://127.0.0.1:11434
+[Ollama] Starting local Ollama...
+[Ollama] Local Ollama started. Waiting for it to be ready...
+[Ollama] Local Ollama is ready
 [on_send] Called with text: 'think...'
 You (typed): think
 [on_send] Put ('text', 'think...') into input_queue
@@ -32,22 +30,16 @@ You (typed): think
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
 [Model] Using Ollama with deepseek-r1:8b
-[Thinking] Chunk #1: 'Sure...'
-[ResponseWorker] Step 3: Got response='Sure! I can think through a problem, analyze a sit...'
-[ResponseWorker] Step 4: Adding to history and calling process_response...
-[Context] Added 45 tokens (total: 45/256000)
-[ResponseWorker] Step 5: Calling process_response with response='Sure! I can think through a problem, analyze a sit...'
-
-Jarvis: Sure! I can think through a problem, analyze a situation, or explore ideas step by step. Please let me know what you'd like me to think about or what topic you're interested in.
-[ResponseWorker] Step 5: process_response completed successfully
-[on_send] Called with text: 'use 32b...'
-You (typed): use 32b
-[on_send] Put ('text', 'use 32b...') into input_queue
-[ProcessQueue] Received query: source=text, text='use 32b...'
-[ProcessQueue] Interrupting and queuing: 'use 32b...'
-[ResponseWorker] Query processing complete
-[ResponseWorker] Received query: 'use 32b...'
-[ResponseWorker] Step 1: Got query from queue: 'use 32b...'
+[Thinking] Panel visible
+[on_send] Called with text: 'thin kusing kimi...'
+You (typed): thin kusing kimi
+[on_send] Put ('text', 'thin kusing kimi...') into input_queue
+[ProcessQueue] Received query: source=text, text='thin kusing kimi...'
+[ProcessQueue] Interrupting and queuing: 'thin kusing kimi...'
+[ResponseWorker] Step 3: Got response='__INTERRUPTED__...'
+[ResponseWorker] Interrupted, skipping response display
+[ResponseWorker] Received query: 'thin kusing kimi...'
+[ResponseWorker] Step 1: Got query from queue: 'thin kusing kimi...'
 [ResponseWorker] Step 2: Checking direct skills...
 [ResponseWorker] Step 2: No direct skill matched, routing to LLM
 [ResponseWorker] Step 3: Calling ollama API...
